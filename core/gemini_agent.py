@@ -3,7 +3,7 @@ import numpy as np
 from google import genai
 from dotenv import load_dotenv
 import os
-from core.bl_engine import BlackLittermanEngine
+from .bl_engine import BlackLittermanEngine
 
 import os
 
