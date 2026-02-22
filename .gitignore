@@ -2,3 +2,6 @@
 venv/
 __pycache__/
 service_account.json
+*.json
+service_account.json
+litterman-ai-62fd01754715.json
