@@ -5,7 +5,7 @@ import pyaudio
 
 from google import genai
 from google.genai import types
-from .bl_engine import BlackLittermanEngine
+from core.bl_engine import BlackLittermanEngine
 from .gemini_agent import extract_views_from_news, views_to_matrices
 
 ASSETS = ['Stocks_USA', 'Stocks_EM', 'Bonds_USA']
@@ -28,73 +28,115 @@ Be concise, professional, and quantitative. Speak like a senior quant analyst.
 Current portfolio assets: Stocks_USA, Stocks_EM, Bonds_USA
 """
 
-AUDIO_FORMAT = pyaudio.paInt16
+FORMAT = pyaudio.paInt16
 CHANNELS = 1
-RATE = 24000
+INPUT_RATE = 16000
+OUTPUT_RATE = 24000
 CHUNK = 1024
 
-
-async def run_voice_agent():
-    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-    config = types.LiveConnectConfig(
-        response_modalities=["AUDIO"],
-        system_instruction=SYSTEM_PROMPT,
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Charon"
-                )
+MODEL = "models/gemini-2.5-flash-native-audio-latest"
+CONFIG = types.LiveConnectConfig(
+    response_modalities=["AUDIO"],
+    system_instruction=SYSTEM_PROMPT,
+    speech_config=types.SpeechConfig(
+        voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                voice_name="Charon"
             )
         )
     )
+)
 
-    # PyAudio inicializado antes do async with
-    pa = pyaudio.PyAudio()
-    audio_stream = pa.open(
-        format=AUDIO_FORMAT,
+pya = pyaudio.PyAudio()
+audio_queue_output = asyncio.Queue()
+audio_queue_mic = asyncio.Queue(maxsize=5)
+mic_stream = None
+
+
+async def listen_audio():
+    """Captures microphone and puts chunks into mic queue."""
+    global mic_stream
+    mic_info = pya.get_default_input_device_info()
+    mic_stream = await asyncio.to_thread(
+        pya.open,
+        format=FORMAT,
         channels=CHANNELS,
-        rate=RATE,
-        output=True,
-        frames_per_buffer=CHUNK
+        rate=INPUT_RATE,
+        input=True,
+        input_device_index=mic_info["index"],
+        frames_per_buffer=CHUNK,
     )
+    print("Litterman Voice Agent started. Speak naturally.\n")
+    while True:
+        data = await asyncio.to_thread(
+            mic_stream.read, CHUNK, **{"exception_on_overflow": False}
+        )
+        await audio_queue_mic.put({"data": data, "mime_type": "audio/pcm"})
 
-    print("Starting Litterman Voice Agent...")
-    print("Speak to your AI portfolio co-pilot. Press Ctrl+C to stop.\n")
+
+async def send_realtime(session):
+    """Sends mic audio from queue to Gemini session."""
+    while True:
+        msg = await audio_queue_mic.get()
+        await session.send_realtime_input(audio=msg)
+
+
+async def receive_audio(session):
+    """Receives Gemini response and queues audio for playback."""
+    while True:
+        turn = session.receive()
+        async for response in turn:
+            if response.server_content and response.server_content.model_turn:
+                for part in response.server_content.model_turn.parts:
+                    if part.text:
+                        print(f"Litterman: {part.text}")
+                    if part.inline_data and isinstance(part.inline_data.data, bytes):
+                        audio_queue_output.put_nowait(part.inline_data.data)
+
+        # Clear output queue on interruption to stop playback immediately
+        while not audio_queue_output.empty():
+            audio_queue_output.get_nowait()
+        print("[Listening...]\n")
+
+
+async def play_audio():
+    """Plays audio chunks from output queue through speakers."""
+    stream = await asyncio.to_thread(
+        pya.open,
+        format=FORMAT,
+        channels=CHANNELS,
+        rate=OUTPUT_RATE,
+        output=True,
+    )
+    while True:
+        bytestream = await audio_queue_output.get()
+        await asyncio.to_thread(stream.write, bytestream)
+
+
+async def run_voice_agent():
+    """Main entry point — connects to Gemini and runs all tasks."""
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
     try:
-        async with client.aio.live.connect(
-            model="models/gemini-2.5-flash-native-audio-latest",
-            config=config
-        ) as session:
+        async with client.aio.live.connect(model=MODEL, config=CONFIG) as session:
 
-            await session.send_client_content(
-                turns=[types.Content(
-                    role="user",
-                    parts=[types.Part(text="Introduce yourself briefly.")]
-                )],
-                turn_complete=True
+            # Send initial greeting
+            await session.send_realtime_input(
+                text="Introduce yourself briefly."
             )
 
-            async for response in session.receive():
-                if response.server_content:
-                    model_turn = response.server_content.model_turn
-                    if model_turn:
-                        for part in model_turn.parts:
-                            if part.text:
-                                print(f"Litterman: {part.text}")
-                            if part.inline_data and part.inline_data.data:
-                                audio_stream.write(part.inline_data.data)
+            async with asyncio.TaskGroup() as tg:
+                tg.create_task(listen_audio())
+                tg.create_task(send_realtime(session))
+                tg.create_task(receive_audio(session))
+                tg.create_task(play_audio())
 
-                    if response.server_content.turn_complete:
-                        print("[Turn complete]\n")
-
-    except KeyboardInterrupt:
+    except* KeyboardInterrupt:
         print("\nStopping agent...")
     finally:
-        audio_stream.stop_stream()
-        audio_stream.close()
-        pa.terminate()
+        if mic_stream:
+            mic_stream.close()
+        pya.terminate()
 
 
 if __name__ == "__main__":
