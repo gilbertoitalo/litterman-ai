@@ -5,12 +5,13 @@ import pyaudio
 
 from google import genai
 from google.genai import types
-from core.bl_engine import BlackLittermanEngine
-from .gemini_agent import extract_views_from_news, views_to_matrices
+from .bl_engine import BlackLittermanEngine
+from .gemini_agent import run_bl_pipeline, format_bl_result_for_voice
 
 ASSETS = ['Stocks_USA', 'Stocks_EM', 'Bonds_USA']
 WEIGHTS = np.array([0.60, 0.30, 0.10])
 COV = np.diag([0.0225, 0.0324, 0.0025])
+ORIGINAL_WEIGHTS_DICT = {'Stocks_USA': 0.60, 'Stocks_EM': 0.30, 'Bonds_USA': 0.10}
 
 SYSTEM_PROMPT = """
 You are Litterman, an AI co-pilot for asset managers.
@@ -44,12 +45,15 @@ CONFIG = types.LiveConnectConfig(
                 voice_name="Charon"
             )
         )
-    )
+    ),
+    input_audio_transcription=types.AudioTranscriptionConfig(),
 )
 
 pya = pyaudio.PyAudio()
 audio_queue_output = asyncio.Queue()
 audio_queue_mic = asyncio.Queue(maxsize=5)
+transcript_queue = asyncio.Queue()
+agent_is_speaking = asyncio.Event()
 mic_stream = None
 
 
@@ -82,18 +86,33 @@ async def send_realtime(session):
 
 
 async def receive_audio(session):
-    """Receives Gemini response and queues audio for playback."""
+    """Receives Gemini response, queues audio for playback, and captures transcripts."""
     while True:
         turn = session.receive()
+        transcript_buffer = [] # Buffer to accumulate transcript chunks per turn
         async for response in turn:
-            if response.server_content and response.server_content.model_turn:
-                for part in response.server_content.model_turn.parts:
-                    if part.text:
-                        print(f"Litterman: {part.text}")
-                    if part.inline_data and isinstance(part.inline_data.data, bytes):
-                        audio_queue_output.put_nowait(part.inline_data.data)
+            if response.server_content:
+                # Only capture transcript when agent is NOT speaking
+                if response.server_content.input_transcription:
+                    chunk = response.server_content.input_transcription.text
+                    if chunk.strip():
+                        transcript_buffer.append(chunk)
 
-        # Clear output queue on interruption to stop playback immediately
+                if response.server_content.model_turn:
+                    # Block transcript capture while Litterman speaks
+                    agent_is_speaking.set()
+                    for part in response.server_content.model_turn.parts:
+                        if part.text:
+                            print(f"Litterman: {part.text}")
+                        if part.inline_data and isinstance(part.inline_data.data, bytes):
+                            audio_queue_output.put_nowait(part.inline_data.data)
+
+        # Turn complete — release flag and clear output queue on interruption
+        agent_is_speaking.clear()
+        if transcript_buffer and not agent_is_speaking.is_set():
+            full_transcript = " ".join(transcript_buffer)
+            print(f"Manager said: {full_transcript}")
+            await transcript_queue.put(full_transcript)
         while not audio_queue_output.empty():
             audio_queue_output.get_nowait()
         print("[Listening...]\n")
@@ -113,6 +132,57 @@ async def play_audio():
         await asyncio.to_thread(stream.write, bytestream)
 
 
+async def bl_listener(session):
+    """Listens to manager transcripts, decides if BL pipeline should run,
+    and injects results back into the voice session."""
+    classifier_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    cooldown = False
+
+    while True:
+        transcript = await transcript_queue.get()
+
+        # Skip if in cooldown after BL injection
+        if cooldown:
+            print("[BL Listener] Cooldown active — skipping.")
+            continue
+
+        classification = await asyncio.to_thread(
+            classifier_client.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=f"""Does this text describe a financial market event, news, or economic development
+that could affect asset prices? Reply with only YES or NO.
+
+Text: {transcript}"""
+        )
+
+        is_market_news = classification.text.strip().upper().startswith("YES")
+        print(f"[BL Listener] Market news detected: {is_market_news}")
+
+        if is_market_news:
+            print("[BL Listener] Running Black-Litterman pipeline...")
+            try:
+                bl_result = await asyncio.to_thread(
+                    run_bl_pipeline,
+                    transcript,
+                    ASSETS,
+                    WEIGHTS,
+                    COV
+                )
+
+                prompt = format_bl_result_for_voice(bl_result, ORIGINAL_WEIGHTS_DICT)
+                await session.send_realtime_input(text=prompt)
+                print("[BL Listener] Results injected. Cooldown started (15s).")
+
+                # Cooldown — ignore transcripts while Litterman presents results
+                cooldown = True
+                await asyncio.sleep(15)
+                cooldown = False
+                print("[BL Listener] Cooldown ended — listening again.\n")
+
+            except Exception as e:
+                print(f"[BL Listener error] {e}")
+
+
 async def run_voice_agent():
     """Main entry point — connects to Gemini and runs all tasks."""
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -130,6 +200,7 @@ async def run_voice_agent():
                 tg.create_task(send_realtime(session))
                 tg.create_task(receive_audio(session))
                 tg.create_task(play_audio())
+                tg.create_task(bl_listener(session))
 
     except* KeyboardInterrupt:
         print("\nStopping agent...")
