@@ -44,9 +44,16 @@ Respond ONLY with a JSON object in this exact format, no explanation:
 
 Rules:
 - expected_return must be annual, as decimal (e.g. 0.09 for 9%)
+- expected_return must be REALISTIC and BOUNDED:
+    * Stocks_USA normal range: -0.15 to +0.15 (e.g. bearish: -0.05, bullish: +0.08)
+    * Stocks_EM normal range:  -0.20 to +0.20 (e.g. bearish: -0.08, bullish: +0.10)
+    * Bonds_USA normal range:  -0.08 to +0.08 (e.g. bearish: -0.03, bullish: +0.04)
+- NEVER use expected_return outside [-0.25, +0.25] — these are annual return adjustments, not price shocks
 - confidence between 0.1 (low) and 0.9 (high)
 - only include assets from the provided list
 - maximum 3 views
+- for rate hike news: Bonds_USA expected_return should be NEGATIVE (price falls as yields rise)
+- for rate hike news: Stocks_USA and Stocks_EM expected_return should be slightly NEGATIVE
 """
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -114,6 +121,9 @@ def format_bl_result_for_voice(bl_result: dict, original_weights: dict) -> str:
     """
     Formats BL pipeline result into a structured prompt for the voice agent.
     Gemini will read this and respond verbally to the manager.
+
+    FIX: Instructs the model to respond ONCE, with no thinking steps,
+    no markdown headers, and no repetition — optimised for spoken audio.
     """
     views_text = "\n".join(
         f"- {v['description']} (confidence: {v['confidence']:.0%})"
@@ -127,7 +137,8 @@ def format_bl_result_for_voice(bl_result: dict, original_weights: dict) -> str:
 
     return f"""
 The manager just described a market event. You have already run the Black-Litterman model.
-Present the results clearly and concisely, as a senior quant analyst would in a brief verbal briefing.
+Deliver ONE single verbal briefing, immediately. No preamble, no thinking steps, no headers.
+Speak as a senior quant analyst giving a 30-second verbal update in a live meeting.
 
 Views extracted:
 {views_text}
@@ -137,8 +148,12 @@ Portfolio rebalancing recommendation:
 
 Sharpe Ratio: {bl_result["sharpe_ratio"]:.4f}
 
-Speak naturally. Highlight the most significant weight changes and what is driving them.
-Do not read all numbers — synthesise the key message.
+Rules:
+- Respond ONCE only. Do not repeat or rephrase.
+- Do not use markdown headers or bullet points — this is spoken audio.
+- Highlight the 1-2 most significant weight changes and the key driver.
+- Mention the Sharpe ratio once at the end.
+- Maximum 4 sentences total.
 """
 
 

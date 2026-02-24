@@ -5,6 +5,10 @@ from scipy.optimize import minimize
 class BlackLittermanEngine:
     """
     Black-Litterman Engine for portfolio optimization.
+
+    The optimizer uses the canonical BL approach: find weights that maximize
+    the posterior utility (mu'w - delta/2 * w'Sigma*w) rather than raw Sharpe.
+    This ensures results are perturbations of market weights, not extreme concentrations.
     """
 
     def __init__(self, assets: list, market_weights: np.array,
@@ -26,7 +30,7 @@ class BlackLittermanEngine:
         self.omega = None
 
     def compute_prior(self) -> np.array:
-        """Computes implied equilibrium returns (Pi)"""
+        """Computes implied equilibrium returns (Pi)."""
         pi = self.delta * self.cov @ self.weights
         return pi
 
@@ -34,12 +38,9 @@ class BlackLittermanEngine:
         """
         Adds manager views to the model.
 
-        P     : pick matrix - which assets are in each view
-                 shape: (num_views x num_assets)
-        Q     : expected returns vector for each view
-                 shape: (num_views,)
-        omega : uncertainty matrix for each view (diagonal)
-                 if None, calculated automatically from tau and cov
+        P     : pick matrix (num_views x num_assets)
+        Q     : expected returns vector (num_views,)
+        omega : uncertainty matrix — if None, computed from tau and cov
         """
         self.P = P
         self.Q = Q
@@ -53,6 +54,7 @@ class BlackLittermanEngine:
         """
         Computes posterior expected returns (mu) combining
         equilibrium prior with manager views.
+
         Formula: mu = [(tau*Sigma)^-1 + P'*Omega^-1*P]^-1
                       [(tau*Sigma)^-1*Pi + P'*Omega^-1*Q]
         """
@@ -70,35 +72,46 @@ class BlackLittermanEngine:
 
     def optimize(self) -> dict:
         """
-        Computes optimal portfolio weights by maximizing Sharpe ratio
-        using posterior expected returns.
-        Returns dict with weights, expected return, volatility and Sharpe.
+        Computes optimal portfolio weights using canonical BL utility maximization:
+            max  mu'w - (delta/2) * w'Sigma*w
+            s.t. sum(w) = 1, 0 <= w_i <= 0.75 (max concentration per asset)
+
+        This approach ensures the result is a PERTURBATION of market weights,
+        not an extreme concentration driven by relative return differences.
+        The 0.75 upper bound prevents any single asset from dominating.
         """
         mu = self.compute_posterior()
-
-        def neg_sharpe(weights):
-            port_return = np.dot(weights, mu)
-            port_vol = np.sqrt(weights @ self.cov @ weights)
-            return -port_return / port_vol  # negative because we minimize
-
         n = len(self.assets)
+
+        def neg_utility(weights):
+            # Canonical BL utility: mu'w - (delta/2)*w'Sigma*w
+            port_return = np.dot(weights, mu)
+            risk_penalty = (self.delta / 2) * (weights @ self.cov @ weights)
+            return -(port_return - risk_penalty)  # negative because we minimize
 
         # Constraints: weights sum to 1
         constraints = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
 
-        # Bounds: no short selling (0 to 1)
-        bounds = [(0, 1) for _ in range(n)]
+        # Bounds: max turnover of 20pp per asset from market weights
+        # e.g. Stocks_USA at 60% can range from 40% to 75% (capped at 75%)
+        # e.g. Bonds_USA at 10% can range from 0% to 30%
+        max_turnover = 0.20
+        bounds = [
+            (max(0.0, self.weights[i] - max_turnover),
+             min(0.75, self.weights[i] + max_turnover))
+            for i in range(n)
+        ]
 
-        # Initial guess: equal weights
-        w0 = np.ones(n) / n
+        # Initial guess: market weights (canonical BL starting point)
+        w0 = self.weights.copy()
 
-        result = minimize(neg_sharpe, w0, method='SLSQP',
+        result = minimize(neg_utility, w0, method='SLSQP',
                           bounds=bounds, constraints=constraints)
 
         optimal_weights = result.x
         opt_return = np.dot(optimal_weights, mu)
         opt_vol = np.sqrt(optimal_weights @ self.cov @ optimal_weights)
-        opt_sharpe = opt_return / opt_vol
+        opt_sharpe = opt_return / opt_vol if opt_vol > 0 else 0.0
 
         return {
             'weights': dict(zip(self.assets, optimal_weights)),
@@ -121,25 +134,21 @@ if __name__ == "__main__":
     for a, r in zip(assets, pi):
         print(f"  {a}: {r*100:.2f}%")
 
+    # Simulate rate hike views: negative on all, bonds worst
     P = np.array([
-        [1,  0,  0],   # View 1: absolute on Stocks_USA
-        [0,  1, -1],   # View 2: Stocks_EM outperforms Bonds_USA
+        [1, 0,  0],   # View 1: absolute on Stocks_USA
+        [0, 1,  0],   # View 2: absolute on Stocks_EM
+        [0, 0,  1],   # View 3: absolute on Bonds_USA
     ])
-    Q = np.array([0.09, 0.05])
+    Q = np.array([-0.04, -0.06, -0.03])  # All negative, bonds slightly less negative
 
     bl.add_views(P, Q)
     mu = bl.compute_posterior()
 
-    print("\nPosterior returns (after views):")
+    print("\nPosterior returns (after rate hike views):")
     for a, r in zip(assets, mu):
         print(f"  {a}: {r*100:.2f}%")
 
-    print("\nView impact:")
-    for a, prior, post in zip(assets, pi, mu):
-        diff = (post - prior) * 100
-        print(f"  {a}: {'+' if diff > 0 else ''}{diff:.2f}% vs prior")
-
-    # Optimization
     result = bl.optimize()
 
     print("\nOptimal Portfolio Weights:")

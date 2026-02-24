@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import numpy as np
 import pyaudio
 
@@ -15,18 +16,8 @@ ORIGINAL_WEIGHTS_DICT = {'Stocks_USA': 0.60, 'Stocks_EM': 0.30, 'Bonds_USA': 0.1
 
 SYSTEM_PROMPT = """
 You are Litterman, an AI co-pilot for asset managers.
-Your role is to help portfolio managers analyse news and market events,
-extract quantitative views, and suggest portfolio rebalancing based on
-the Black-Litterman model.
-
-When the manager describes a market event or news:
-1. Acknowledge the event and its potential market impact
-2. Explain what views you are extracting
-3. Present the portfolio rebalancing recommendation clearly
-4. Always mention the Sharpe ratio and key weight changes
-
-Be concise, professional, and quantitative. Speak like a senior quant analyst.
-Current portfolio assets: Stocks_USA, Stocks_EM, Bonds_USA
+When given Black-Litterman results, read them aloud in exactly 3 sentences. No analysis, no headers, no thinking. Just speak the numbers.
+Current portfolio: Stocks_USA, Stocks_EM, Bonds_USA
 """
 
 FORMAT = pyaudio.paInt16
@@ -34,6 +25,11 @@ CHANNELS = 1
 INPUT_RATE = 16000
 OUTPUT_RATE = 24000
 CHUNK = 1024
+
+# Debounce window: seconds of silence before treating utterance as complete.
+# Gemini Live breaks long utterances into multiple turns — we wait for the
+# manager to stop speaking before sending the full transcript to the BL pipeline.
+DEBOUNCE_SECONDS = 4.0
 
 MODEL = "models/gemini-2.5-flash-native-audio-latest"
 CONFIG = types.LiveConnectConfig(
@@ -47,14 +43,38 @@ CONFIG = types.LiveConnectConfig(
         )
     ),
     input_audio_transcription=types.AudioTranscriptionConfig(),
+    # thinking_config removed — not supported by Native Audio model
+
 )
 
 pya = pyaudio.PyAudio()
 audio_queue_output = asyncio.Queue()
 audio_queue_mic = asyncio.Queue(maxsize=5)
-transcript_queue = asyncio.Queue()
+
+# Two-stage transcript pipeline:
+# receive_audio -> _raw_transcript_queue -> debounce_task -> transcript_queue -> bl_listener
+_raw_transcript_queue = asyncio.Queue()  # individual turn chunks (may be partial utterances)
+transcript_queue = asyncio.Queue()        # complete debounced utterances ready for BL
+
 agent_is_speaking = asyncio.Event()
 mic_stream = None
+
+# Global flag: set when BL pipeline is running or in cooldown.
+# Blocks receive_audio from sending new transcripts during this period.
+_bl_processing = asyncio.Event()
+
+
+def _normalise_transcript(raw: str) -> str:
+    """
+    Normalises fragmented transcription from Gemini audio chunking.
+    - Collapses single characters separated by spaces (chunking artefacts e.g. "eme rgen")
+    - Collapses multiple spaces into one
+    - Strips leading/trailing whitespace
+    """
+    text = raw
+    text = re.sub(r'\b(\w)\s+(?=\w)', lambda m: m.group(1), text)
+    text = re.sub(r' +', ' ', text).strip()
+    return text
 
 
 async def listen_audio():
@@ -86,36 +106,112 @@ async def send_realtime(session):
 
 
 async def receive_audio(session):
-    """Receives Gemini response, queues audio for playback, and captures transcripts."""
+    """
+    Receives Gemini response, queues audio for playback, and captures transcripts.
+
+    Each Gemini turn may be a partial utterance — long sentences arrive across
+    multiple turns. Each turn's transcript is sent to _raw_transcript_queue;
+    debounce_task assembles them into complete utterances.
+
+    Filtering:
+    - Skips turns where the agent spoke (avoids echo triggering BL)
+    - Skips turns during BL cooldown
+    - Skips transcripts shorter than 15 chars
+    """
     while True:
         turn = session.receive()
-        transcript_buffer = [] # Buffer to accumulate transcript chunks per turn
+        transcript_chunks = []
+        turn_had_agent_speech = False
+
         async for response in turn:
             if response.server_content:
-                # Only capture transcript when agent is NOT speaking
+
+                # Capture user input transcription
                 if response.server_content.input_transcription:
                     chunk = response.server_content.input_transcription.text
-                    if chunk.strip():
-                        transcript_buffer.append(chunk)
+                    if chunk:
+                        transcript_chunks.append(chunk)
 
+                # Agent is speaking
                 if response.server_content.model_turn:
-                    # Block transcript capture while Litterman speaks
                     agent_is_speaking.set()
+                    turn_had_agent_speech = True
                     for part in response.server_content.model_turn.parts:
                         if part.text:
                             print(f"Litterman: {part.text}")
                         if part.inline_data and isinstance(part.inline_data.data, bytes):
                             audio_queue_output.put_nowait(part.inline_data.data)
 
-        # Turn complete — release flag and clear output queue on interruption
+        # Turn complete
         agent_is_speaking.clear()
-        if transcript_buffer and not agent_is_speaking.is_set():
-            full_transcript = " ".join(transcript_buffer)
-            print(f"Manager said: {full_transcript}")
-            await transcript_queue.put(full_transcript)
+
+        # Clear output queue if interrupted mid-playback
         while not audio_queue_output.empty():
             audio_queue_output.get_nowait()
+
+        # Normalise and forward to debounce stage
+        if transcript_chunks:
+            raw = "".join(transcript_chunks)
+            full_transcript = _normalise_transcript(raw)
+            print(f"[turn] {full_transcript}")
+
+            if (
+                not turn_had_agent_speech
+                and not _bl_processing.is_set()
+                and len(full_transcript) >= 15
+            ):
+                await _raw_transcript_queue.put(full_transcript)
+            else:
+                reason = []
+                if turn_had_agent_speech:
+                    reason.append("agent turn echo")
+                if _bl_processing.is_set():
+                    reason.append("BL cooldown active")
+                if len(full_transcript) < 15:
+                    reason.append(f"too short ({len(full_transcript)} chars)")
+                print(f"[receive_audio] Skipped: {', '.join(reason)}")
+
         print("[Listening...]\n")
+
+
+async def debounce_task():
+    """
+    Assembles partial turn transcripts into complete utterances.
+
+    Gemini Live breaks long speech into multiple turns. This task collects
+    all turns arriving within DEBOUNCE_SECONDS of each other, joins them,
+    and sends the complete utterance to transcript_queue for the BL pipeline.
+
+    Example:
+        [turn] "The Federal Reserve announced today"      t=0.0s
+        [turn] "an unexpected 50 basis point rate hike"   t=0.8s
+        [turn] "citing persistent inflation above 4%"     t=1.5s
+        --- 2.5s silence ---
+        Manager said: "The Federal Reserve announced today an unexpected..."
+    """
+    accumulated = []
+
+    while True:
+        try:
+            if not accumulated:
+                # Blocking wait for first chunk
+                chunk = await _raw_transcript_queue.get()
+                accumulated.append(chunk)
+
+            # Wait for more chunks within the debounce window
+            chunk = await asyncio.wait_for(
+                _raw_transcript_queue.get(),
+                timeout=DEBOUNCE_SECONDS
+            )
+            accumulated.append(chunk)
+
+        except asyncio.TimeoutError:
+            # Silence window elapsed — utterance is complete
+            if accumulated:
+                full_utterance = " ".join(accumulated)
+                print(f"Manager said: {full_utterance}")
+                await transcript_queue.put(full_utterance)
+                accumulated = []
 
 
 async def play_audio():
@@ -133,34 +229,46 @@ async def play_audio():
 
 
 async def bl_listener(session):
-    """Listens to manager transcripts, decides if BL pipeline should run,
-    and injects results back into the voice session."""
+    """
+    Listens to complete manager utterances, classifies them as market news or not,
+    runs the Black-Litterman pipeline if relevant, and injects results into the session.
+
+    Uses _bl_processing to block new transcripts during the entire cycle.
+    The finally block ensures the flag is always cleared, even on error.
+    """
     classifier_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-    cooldown = False
 
     while True:
         transcript = await transcript_queue.get()
 
-        # Skip if in cooldown after BL injection
-        if cooldown:
-            print("[BL Listener] Cooldown active — skipping.")
+        # Race condition guard
+        if _bl_processing.is_set():
+            print("[BL Listener] Race condition caught — discarding.")
             continue
 
-        classification = await asyncio.to_thread(
-            classifier_client.models.generate_content,
-            model="gemini-2.5-flash",
-            contents=f"""Does this text describe a financial market event, news, or economic development
+        # Set global flag BEFORE classifying
+        _bl_processing.set()
+
+        # Discard any extra entries that accumulated while we were busy
+        while not transcript_queue.empty():
+            discarded = transcript_queue.get_nowait()
+            print(f"[BL Listener] Discarded duplicate: {discarded[:60]}...")
+
+        try:
+            classification = await asyncio.to_thread(
+                classifier_client.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=f"""Does this text describe a financial market event, news, or economic development
 that could affect asset prices? Reply with only YES or NO.
 
 Text: {transcript}"""
-        )
+            )
 
-        is_market_news = classification.text.strip().upper().startswith("YES")
-        print(f"[BL Listener] Market news detected: {is_market_news}")
+            is_market_news = classification.text.strip().upper().startswith("YES")
+            print(f"[BL Listener] Market news detected: {is_market_news}")
 
-        if is_market_news:
-            print("[BL Listener] Running Black-Litterman pipeline...")
-            try:
+            if is_market_news:
+                print("[BL Listener] Running Black-Litterman pipeline...")
                 bl_result = await asyncio.to_thread(
                     run_bl_pipeline,
                     transcript,
@@ -173,18 +281,29 @@ Text: {transcript}"""
                 await session.send_realtime_input(text=prompt)
                 print("[BL Listener] Results injected. Cooldown started (15s).")
 
-                # Cooldown — ignore transcripts while Litterman presents results
-                cooldown = True
+                # 15s cooldown — _bl_processing stays active during this period
                 await asyncio.sleep(15)
-                cooldown = False
                 print("[BL Listener] Cooldown ended — listening again.\n")
 
-            except Exception as e:
-                print(f"[BL Listener error] {e}")
+            else:
+                # Not market news — short cooldown to avoid classifier spam
+                await asyncio.sleep(2)
+
+        except Exception as e:
+            print(f"[BL Listener error] {e}")
+
+        finally:
+            # ALWAYS clear the flag, even on error
+            _bl_processing.clear()
+            # Drain both queues after cooldown
+            while not transcript_queue.empty():
+                transcript_queue.get_nowait()
+            while not _raw_transcript_queue.empty():
+                _raw_transcript_queue.get_nowait()
 
 
 async def run_voice_agent():
-    """Main entry point — connects to Gemini and runs all tasks."""
+    """Main entry point — connects to Gemini and runs all 6 async tasks."""
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
     try:
@@ -192,7 +311,7 @@ async def run_voice_agent():
 
             # Send initial greeting
             await session.send_realtime_input(
-                text="Introduce yourself briefly."
+                text="Say exactly this out loud: 'I am Litterman, your AI co-pilot for portfolio management. How can I help you today.'"
             )
 
             async with asyncio.TaskGroup() as tg:
@@ -200,6 +319,7 @@ async def run_voice_agent():
                 tg.create_task(send_realtime(session))
                 tg.create_task(receive_audio(session))
                 tg.create_task(play_audio())
+                tg.create_task(debounce_task())       # NEW: debounce stage
                 tg.create_task(bl_listener(session))
 
     except* KeyboardInterrupt:
