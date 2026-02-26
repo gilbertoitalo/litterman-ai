@@ -5,5 +5,4 @@ start.ps1
 service_account.json
 *.json
 service_account.json
-litterman-ai-62fd01754715.json
 data/.gitkeep

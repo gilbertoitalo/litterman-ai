@@ -40,7 +40,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-STATE_FILE = Path(__file__).parent / "state.json"
+STATE_FILE = Path(__file__).parent.parent / "data" / "state.json"
 
 INITIAL_WEIGHTS = {
     "Stocks_USA": 0.60,
@@ -150,19 +150,42 @@ def reset_state() -> None:
 
 
 if __name__ == "__main__":
-    # Quick smoke test
     reset_state()
-    print("State reset.")
+    print("State reset.\n")
+
+    # Event 1 — Fed rate hike (bearish)
     push_bl_result(
-        transcript="The Federal Reserve signaled rates higher for longer.",
+        transcript="The Federal Reserve signaled today that it will keep interest rates higher for longer, citing persistent inflation concerns. Markets reacted with US equities falling sharply while emerging markets showed resilience.",
         views=[
-            {"description": "Bonds_USA yields rise on hawkish Fed", "confidence": 0.8,
+            {"description": "Bonds sell off on hawkish Fed guidance", "confidence": 0.80,
              "type": "absolute", "asset": "Bonds_USA", "expected_return": -0.03},
-            {"description": "US equities slightly negative on tighter policy", "confidence": 0.6,
+            {"description": "US equities slightly negative on tighter policy", "confidence": 0.65,
              "type": "absolute", "asset": "Stocks_USA", "expected_return": -0.04},
+            {"description": "EM equities resilient vs US on relative basis", "confidence": 0.50,
+             "type": "absolute", "asset": "Stocks_EM", "expected_return": -0.02},
         ],
         weights_after={"Stocks_USA": 0.53, "Stocks_EM": 0.17, "Bonds_USA": 0.30},
         sharpe_after=-0.18,
     )
+    print("Event 1 pushed.\n")
+
+    import time as _time
+    _time.sleep(1)
+
+    # Event 2 — Strong jobs report (bullish)
+    push_bl_result(
+        transcript="US non-farm payrolls came in at 350k, well above the 200k consensus. Unemployment fell to 3.7%. Equity futures rallied strongly in pre-market trading on the strong economic data.",
+        views=[
+            {"description": "Strong labour market boosts US equities", "confidence": 0.75,
+             "type": "absolute", "asset": "Stocks_USA", "expected_return": 0.06},
+            {"description": "EM benefits from positive global risk sentiment", "confidence": 0.55,
+             "type": "absolute", "asset": "Stocks_EM", "expected_return": 0.04},
+        ],
+        weights_after={"Stocks_USA": 0.68, "Stocks_EM": 0.26, "Bonds_USA": 0.06},
+        sharpe_after=0.42,
+    )
+    print("Event 2 pushed.\n")
+
     import pprint
     pprint.pprint(get_state())
+
