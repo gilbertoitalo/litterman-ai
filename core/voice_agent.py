@@ -6,8 +6,10 @@ import pyaudio
 
 from google import genai
 from google.genai import types
+from streamlit import form
 from .bl_engine import BlackLittermanEngine
 from .gemini_agent import run_bl_pipeline, format_bl_result_for_voice
+from .shared_state import set_status, push_bl_result
 
 ASSETS = ['Stocks_USA', 'Stocks_EM', 'Bonds_USA']
 WEIGHTS = np.array([0.60, 0.30, 0.10])
@@ -232,29 +234,27 @@ async def bl_listener(session):
     """
     Listens to complete manager utterances, classifies them as market news or not,
     runs the Black-Litterman pipeline if relevant, and injects results into the session.
-
-    Uses _bl_processing to block new transcripts during the entire cycle.
-    The finally block ensures the flag is always cleared, even on error.
+    Also writes results to shared_state.json for the Streamlit dashboard.
     """
     classifier_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
     while True:
         transcript = await transcript_queue.get()
 
-        # Race condition guard
         if _bl_processing.is_set():
             print("[BL Listener] Race condition caught — discarding.")
             continue
 
-        # Set global flag BEFORE classifying
         _bl_processing.set()
 
-        # Discard any extra entries that accumulated while we were busy
         while not transcript_queue.empty():
             discarded = transcript_queue.get_nowait()
             print(f"[BL Listener] Discarded duplicate: {discarded[:60]}...")
 
         try:
+            # Update dashboard status
+            set_status("processing")
+
             classification = await asyncio.to_thread(
                 classifier_client.models.generate_content,
                 model="gemini-2.5-flash",
@@ -277,29 +277,37 @@ Text: {transcript}"""
                     COV
                 )
 
+                # ── Write to shared state for dashboard ──────────────────────
+                push_bl_result(
+                    transcript=transcript,
+                    views=bl_result["views"],
+                    weights_after=bl_result["weights"],
+                    sharpe_after=bl_result["sharpe_ratio"],
+                )
+
+                # ── Inject voice response into session ───────────────────────
                 prompt = format_bl_result_for_voice(bl_result, ORIGINAL_WEIGHTS_DICT)
+                set_status("speaking")
                 await session.send_realtime_input(text=prompt)
                 print("[BL Listener] Results injected. Cooldown started (15s).")
 
-                # 15s cooldown — _bl_processing stays active during this period
                 await asyncio.sleep(15)
                 print("[BL Listener] Cooldown ended — listening again.\n")
 
             else:
-                # Not market news — short cooldown to avoid classifier spam
                 await asyncio.sleep(2)
 
         except Exception as e:
             print(f"[BL Listener error] {e}")
 
         finally:
-            # ALWAYS clear the flag, even on error
             _bl_processing.clear()
-            # Drain both queues after cooldown
+            set_status("listening")
             while not transcript_queue.empty():
                 transcript_queue.get_nowait()
             while not _raw_transcript_queue.empty():
                 _raw_transcript_queue.get_nowait()
+
 
 
 async def run_voice_agent():
