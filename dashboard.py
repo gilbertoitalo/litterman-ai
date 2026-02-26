@@ -14,7 +14,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent))
-from core.shared_state import get_state, INITIAL_WEIGHTS
+from core.shared_state import get_state, INITIAL_WEIGHTS, confirm_rebalance
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -106,6 +106,21 @@ html, body, [class*="css"] {{
     border-color: {C['accent']} !important;
     color: {C['accent']} !important;
     background: transparent !important;
+}}
+
+/* Confirm rebalance button — full width green */
+div[data-testid="column"]:last-child .stButton > button {{
+    width: 100% !important;
+    border-color: #2ea85a !important;
+    color: #2ea85a !important;
+    font-size: 0.7rem !important;
+    padding: 6px 12px !important;
+    margin-top: 0.4rem !important;
+}}
+div[data-testid="column"]:last-child .stButton > button:hover {{
+    background: rgba(46,168,90,0.08) !important;
+    border-color: #2ea85a !important;
+    color: #2ea85a !important;
 }}
 
 .lt-header {{
@@ -398,13 +413,20 @@ def render():
         )
     with m4:
         has_rec = recommended is not None
-        st.markdown(
-            f'<div class="metric-card"><div class="metric-label">Rebalance</div>'
-            f'<div class="metric-value {"positive" if has_rec else ""}" '
-            f'style="font-size:1.1rem; padding-top:0.3rem">'
-            f'{"PENDING" if has_rec else "NONE"}</div></div>',
-            unsafe_allow_html=True
-        )
+        if has_rec:
+            st.markdown(
+                f'<div class="metric-card"><div class="metric-label">Rebalance</div>',
+                unsafe_allow_html=True
+            )
+            if st.button("✓ CONFIRM REBALANCE", key="confirm_rebalance"):
+                confirm_rebalance()
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(
+                f'<div class="metric-card"><div class="metric-label">Rebalance</div><div class="metric-value" style="font-size:1.1rem; padding-top:0.3rem; color:{C["text_muted"]}">NONE</div></div>',
+                unsafe_allow_html=True
+            )
 
     st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
