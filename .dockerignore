@@ -1,0 +1,30 @@
+# ── .dockerignore ─────────────────────────────────────────────────────────────
+# Keeps the Docker image lean — excludes everything not needed to run the dashboard.
+
+# Credentials — NEVER go into the image
+.env
+*.json
+!requirements*.txt
+
+# Local state file — replaced by Firestore in cloud
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Dev / IDE
+.git/
+.gitignore
+.vscode/
+tests/
+*.md
+*.ps1
+story.md
