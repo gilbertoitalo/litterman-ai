@@ -533,6 +533,114 @@ def render():
             unsafe_allow_html=True
         )
 
+    # ── News Input Panel ──────────────────────────────────────────────────────
+    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="lt-section">Manual News Input</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:{C["surface"]}; border:1px solid {C["border"]}; '
+        f'border-radius:3px; padding:1rem 1.2rem; margin-bottom:0.5rem;">'
+        f'<div style="font-family:IBM Plex Mono; font-size:0.65rem; color:{C["text_muted"]}; '
+        f'letter-spacing:0.1em; margin-bottom:0.6rem;">PASTE A URL OR DESCRIBE A MARKET SCENARIO</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    inp_col1, inp_col2 = st.columns([3, 1])
+
+    with inp_col1:
+        url_input = st.text_input(
+            "News URL",
+            placeholder="https://reuters.com/...",
+            label_visibility="collapsed",
+            key="news_url_input",
+        )
+        text_input = st.text_area(
+            "Market scenario",
+            placeholder="e.g. Suppose the ECB cuts rates by 50bps next week and EUR weakens...",
+            label_visibility="collapsed",
+            height=80,
+            key="news_text_input",
+        )
+
+    with inp_col2:
+        st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+        analyse_clicked = st.button("⟶ ANALYSE", key="analyse_news", use_container_width=True)
+        st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+        clear_clicked = st.button("✕ CLEAR", key="clear_input", use_container_width=True)
+
+    # Feedback area
+    if "manual_input_status" not in st.session_state:
+        st.session_state.manual_input_status = ""
+    if "manual_input_error" not in st.session_state:
+        st.session_state.manual_input_error = ""
+
+    if clear_clicked:
+        st.session_state.news_url_input = ""
+        st.session_state.news_text_input = ""
+        st.session_state.manual_input_status = ""
+        st.session_state.manual_input_error = ""
+        st.rerun()
+
+    if analyse_clicked:
+        raw_url = url_input.strip()
+        raw_text = text_input.strip()
+
+        if not raw_url and not raw_text:
+            st.session_state.manual_input_error = "Paste a URL or type a market scenario first."
+            st.session_state.manual_input_status = ""
+        else:
+            import sys
+            from pathlib import Path as _P
+            sys.path.insert(0, str(_P(__file__).parent))
+            from core.gemini_agent import run_bl_pipeline, fetch_url_content
+            from core.shared_state import push_bl_result as _push
+            import numpy as np
+
+            ASSETS = ['Stocks_USA', 'Stocks_EM', 'Bonds_USA']
+            WEIGHTS = np.array([0.60, 0.30, 0.10])
+            COV = np.diag([0.0225, 0.0324, 0.0025])
+
+            st.session_state.manual_input_status = "⟳ Processing..."
+            st.session_state.manual_input_error = ""
+
+            try:
+                # If URL provided, fetch its content; otherwise use typed text
+                if raw_url:
+                    content = fetch_url_content(raw_url)
+                    source_label = raw_url[:60] + "..." if len(raw_url) > 60 else raw_url
+                else:
+                    content = raw_text
+                    source_label = "manual scenario"
+
+                result = run_bl_pipeline(content, ASSETS, WEIGHTS, COV)
+
+                _push(
+                    transcript=f"[Manual input — {source_label}] {content[:200]}",
+                    views=result["views"],
+                    weights_after=result["weights"],
+                    sharpe_after=result["sharpe_ratio"],
+                )
+
+                st.session_state.manual_input_status = f"✓ Analysis complete — Sharpe {result['sharpe_ratio']:.4f}"
+                st.session_state.manual_input_error = ""
+
+            except Exception as e:
+                st.session_state.manual_input_error = f"Error: {str(e)[:120]}"
+                st.session_state.manual_input_status = ""
+
+    if st.session_state.manual_input_status:
+        st.markdown(
+            f'<div style="font-family:IBM Plex Mono; font-size:0.7rem; color:#2ea85a; '
+            f'padding:0.4rem 0;">{st.session_state.manual_input_status}</div>',
+            unsafe_allow_html=True
+        )
+    if st.session_state.manual_input_error:
+        st.markdown(
+            f'<div style="font-family:IBM Plex Mono; font-size:0.7rem; color:#e85040; '
+            f'padding:0.4rem 0;">{st.session_state.manual_input_error}</div>',
+            unsafe_allow_html=True
+        )
+
     # Auto-refresh
     time.sleep(2)
     st.rerun()

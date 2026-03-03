@@ -48,7 +48,7 @@ CONFIG = types.LiveConnectConfig(
         )
     ),
     input_audio_transcription=types.AudioTranscriptionConfig(),
-    #thinking_config=types.ThinkingConfig(thinking_budget=0),  # disable thinking verbosity
+    thinking_config=types.ThinkingConfig(thinking_budget=0),
 )
 
 pya = pyaudio.PyAudio()
@@ -100,7 +100,6 @@ async def receive_audio(session):
     while True:
         turn = session.receive()
         transcript_chunks = []
-        turn_had_agent_speech = False
 
         async for response in turn:
             if response.server_content:
@@ -112,7 +111,6 @@ async def receive_audio(session):
 
                 if response.server_content.model_turn:
                     agent_is_speaking.set()
-                    turn_had_agent_speech = True
                     for part in response.server_content.model_turn.parts:
                         if part.text:
                             print(f"Litterman: {part.text}")
@@ -121,29 +119,23 @@ async def receive_audio(session):
 
         agent_is_speaking.clear()
 
-        while not audio_queue_output.empty():
-            audio_queue_output.get_nowait()
-
         if transcript_chunks:
             raw = "".join(transcript_chunks)
             full_transcript = _normalise_transcript(raw)
             print(f"[turn] {full_transcript}")
 
-            if (
-                not turn_had_agent_speech
-                and not _bl_processing.is_set()
-                and len(full_transcript) >= 15
-            ):
+            # Always forward to BL — bl_listener decides if it's market news
+            # _bl_processing flag prevents duplicate processing during cooldown
+            if not _bl_processing.is_set() and len(full_transcript) >= 15:
                 await _raw_transcript_queue.put(full_transcript)
             else:
                 reason = []
-                if turn_had_agent_speech:
-                    reason.append("agent turn echo")
                 if _bl_processing.is_set():
                     reason.append("BL cooldown active")
                 if len(full_transcript) < 15:
                     reason.append(f"too short ({len(full_transcript)} chars)")
-                print(f"[receive_audio] Skipped: {', '.join(reason)}")
+                if reason:
+                    print(f"[receive_audio] Skipped: {', '.join(reason)}")
 
         print("[Listening...]\n")
 
@@ -234,10 +226,17 @@ Text: {transcript}"""
 
                 prompt = format_bl_result_for_voice(bl_result, ORIGINAL_WEIGHTS_DICT)
                 set_status("speaking")
+
+                # send_realtime_input(text=) reliably triggers an audio response.
+                # send_client_content was not producing audio in all SDK versions.
+                # The _bl_processing flag (set above) blocks any new transcript
+                # from the cooldown window from re-triggering the pipeline.
                 await session.send_realtime_input(text=prompt)
                 print("[BL Listener] Results injected. Cooldown started (15s).")
 
-                await asyncio.sleep(15)
+                # Wait for agent to finish speaking before clearing cooldown
+                await asyncio.sleep(5)   # give model time to start responding
+                await asyncio.sleep(10)  # rest of cooldown
                 print("[BL Listener] Cooldown ended — listening again.\n")
 
             else:

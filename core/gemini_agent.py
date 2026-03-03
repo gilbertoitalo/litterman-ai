@@ -10,6 +10,74 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
+def fetch_url_content(url: str, max_chars: int = 4000) -> str:
+    """
+    Fetches a news article URL and extracts readable text content.
+    Uses Gemini to summarise if the raw content is too long.
+
+    Returns a clean text string suitable for BL view extraction.
+    Raises ValueError if the URL cannot be fetched or parsed.
+    """
+    import urllib.request
+    import urllib.error
+    import re
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            raw_bytes = response.read()
+            encoding = response.headers.get_content_charset() or "utf-8"
+            html = raw_bytes.decode(encoding, errors="replace")
+    except urllib.error.URLError as e:
+        raise ValueError(f"Could not fetch URL: {e.reason}")
+    except Exception as e:
+        raise ValueError(f"Fetch error: {str(e)}")
+
+    # Strip HTML tags
+    text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'&nbsp;', ' ', text)
+    text = re.sub(r'&amp;', '&', text)
+    text = re.sub(r'&lt;', '<', text)
+    text = re.sub(r'&gt;', '>', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    if not text or len(text) < 100:
+        raise ValueError("Could not extract readable text from this URL. Try pasting the article text directly.")
+
+    # If content is too long, use Gemini to extract the financial news summary
+    if len(text) > max_chars:
+        summary_prompt = f"""
+Extract only the key financial and market information from this article text.
+Focus on: market events, economic data, central bank decisions, corporate earnings, or geopolitical events that affect asset prices.
+Return a concise 2-3 paragraph summary. If this is not a financial article, say "NOT_FINANCIAL".
+
+Article text (first 8000 chars):
+{text[:8000]}
+"""
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=summary_prompt
+        )
+        summary = response.text.strip()
+
+        if "NOT_FINANCIAL" in summary:
+            raise ValueError("This URL does not appear to contain financial market news.")
+
+        return summary
+
+    return text[:max_chars]
+
+
 def extract_views_from_news(news_text: str, assets: list) -> dict:
     """
     Uses Gemini to extract Black-Litterman views from a news article.
@@ -119,42 +187,41 @@ def run_bl_pipeline(news_text: str, assets: list, weights: np.ndarray, cov: np.n
 
 def format_bl_result_for_voice(bl_result: dict, original_weights: dict) -> str:
     """
-    Formats BL pipeline result into a structured prompt for the voice agent.
-    Gemini will read this and respond verbally to the manager.
-
-    FIX: Instructs the model to respond ONCE, with no thinking steps,
-    no markdown headers, and no repetition — optimised for spoken audio.
+    Formats BL result as a direct spoken script — not a prompt asking the model
+    to generate something, but the exact structure it should speak aloud.
+    This prevents the model from reasoning about what to say.
     """
-    views_text = "\n".join(
-        f"- {v['description']} (confidence: {v['confidence']:.0%})"
-        for v in bl_result["views"]
-    )
+    # Find the 2 biggest weight changes
+    changes = []
+    for asset, new_w in bl_result["weights"].items():
+        old_w = original_weights.get(asset, 0)
+        delta_pp = (new_w - old_w) * 100
+        if abs(delta_pp) >= 0.5:
+            direction = "up" if delta_pp > 0 else "down"
+            changes.append((abs(delta_pp), asset.replace("_", " "), new_w * 100, direction))
+    changes.sort(reverse=True)
+    top = changes[:2]
 
-    weights_text = "\n".join(
-        f"- {asset}: {original_weights.get(asset, 0)*100:.1f}% -> {weight*100:.1f}%"
-        for asset, weight in bl_result["weights"].items()
-    )
+    # Key view driver
+    top_view = bl_result["views"][0]["description"] if bl_result["views"] else "market event"
+    sharpe = bl_result["sharpe_ratio"]
 
-    return f"""
-The manager just described a market event. You have already run the Black-Litterman model.
-Deliver ONE single verbal briefing, immediately. No preamble, no thinking steps, no headers.
-Speak as a senior quant analyst giving a 30-second verbal update in a live meeting.
+    # Build the exact spoken lines — model just reads this
+    lines = []
+    if top:
+        a1_name, a1_w, a1_dir = top[0][1], top[0][2], top[0][3]
+        lines.append(f"Following the {top_view}, the model recommends moving {a1_name} {a1_dir} to {a1_w:.1f} percent.")
+    if len(top) > 1:
+        a2_name, a2_w, a2_dir = top[1][1], top[1][2], top[1][3]
+        lines.append(f"{a2_name} moves {a2_dir} to {a2_w:.1f} percent.")
+    sharpe_comment = "above breakeven" if sharpe > 0 else "negative given current headwinds"
+    lines.append(f"The portfolio Sharpe ratio is {sharpe:.4f}, {sharpe_comment}.")
 
-Views extracted:
-{views_text}
+    script = " ".join(lines)
 
-Portfolio rebalancing recommendation:
-{weights_text}
+    return f"""Say exactly this, word for word, with no additions, no preamble, no headers:
 
-Sharpe Ratio: {bl_result["sharpe_ratio"]:.4f}
-
-Rules:
-- Respond ONCE only. Do not repeat or rephrase.
-- Do not use markdown headers or bullet points — this is spoken audio.
-- Highlight the 1-2 most significant weight changes and the key driver.
-- Mention the Sharpe ratio once at the end.
-- Maximum 4 sentences total.
-"""
+{script}"""
 
 
 if __name__ == "__main__":

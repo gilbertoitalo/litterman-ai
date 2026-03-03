@@ -46,7 +46,7 @@ INITIAL_WEIGHTS = {
     "Stocks_USA": 0.60,
     "Stocks_EM": 0.30,
     "Bonds_USA": 0.10,
-}
+}                                                                                   
 
 _DEFAULT_STATE = {
     "portfolio": {
