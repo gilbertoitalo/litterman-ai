@@ -1,0 +1,12 @@
+# Force LF line endings for files that must not have CRLF
+# (Docker, shell scripts, and Python run on Linux — CRLF breaks them silently)
+
+Dockerfile          text eol=lf
+*.sh                text eol=lf
+requirements.txt    text eol=lf
+*.py                text eol=lf
+*.toml              text eol=lf
+*.env               text eol=lf
+
+# Auto-detect everything else
+*                   text=auto
