@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 RUN pip install --no-cache-dir \
-    streamlit==1.45.1 \
-    plotly==6.1.1 \
+    flask==3.0.3 \
+    gunicorn==22.0.0 \
     google-genai==1.64.0 \
     google-cloud-firestore==2.23.0 \
     google-cloud-aiplatform==1.138.0 \
@@ -17,12 +17,10 @@ RUN pip install --no-cache-dir \
     python-dotenv==1.2.1 \
     requests==2.32.5
 
-COPY dashboard.py .
+COPY server.py .
+COPY dashboard.html .
 COPY core/ ./core/
-
-RUN mkdir -p /root/.streamlit
-COPY .streamlit_config.toml /root/.streamlit/config.toml
 
 ENV PORT=8080
 
-CMD streamlit run dashboard.py --server.port=$PORT --server.address=0.0.0.0
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 server:app
