@@ -1,596 +1,560 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Litterman · Portfolio Intelligence</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #050508;
-    --bg2: #08090f;
-    --surface: #0c0e18;
-    --surface2: #111420;
-    --border: #1a1e2e;
-    --border2: #222840;
-    --text: #8890a8;
-    --text-strong: #d8dce8;
-    --text-bright: #eef0f8;
-    --muted: #3a4060;
-    --accent: #4d7cfe;
-    --accent-dim: rgba(77,124,254,0.12);
-    --accent-glow: rgba(77,124,254,0.25);
-    --green: #00d97e;
-    --green-dim: rgba(0,217,126,0.1);
-    --red: #ff4d6a;
-    --red-dim: rgba(255,77,106,0.1);
-    --gold: #f0b429;
-    --gold-dim: rgba(240,180,41,0.1);
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: 'JetBrains Mono', monospace;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* Subtle grid background */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(77,124,254,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(77,124,254,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .container {
-    position: relative;
-    z-index: 1;
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 2rem 3rem;
-  }
-
-  /* ── HEADER ── */
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem 0 1.2rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 2rem;
-  }
-
-  .logo {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-  }
-
-  .logo-mark {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: var(--text-bright);
-    letter-spacing: -0.03em;
-  }
-
-  .logo-mark span { color: var(--accent); }
-
-  .logo-sub {
-    font-size: 0.6rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--muted);
-    padding-left: 0.5rem;
-    border-left: 1px solid var(--border2);
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-  }
-
-  .status-badge {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.65rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    padding: 0.35rem 0.8rem;
-    border-radius: 2px;
-    border: 1px solid var(--border2);
-    transition: all 0.3s ease;
-  }
-
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-
-  .status-badge.listening { border-color: rgba(77,124,254,0.4); color: var(--accent); background: var(--accent-dim); }
-  .status-badge.listening .status-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.5s infinite; }
-  .status-badge.processing { border-color: rgba(240,180,41,0.4); color: var(--gold); background: var(--gold-dim); }
-  .status-badge.processing .status-dot { background: var(--gold); box-shadow: 0 0 8px var(--gold); animation: pulse 0.8s infinite; }
-  .status-badge.speaking { border-color: rgba(0,217,126,0.4); color: var(--green); background: var(--green-dim); }
-  .status-badge.speaking .status-dot { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 0.5s infinite; }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.8); }
-  }
-
-  .last-updated {
-    font-size: 0.6rem;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-  }
-
-  /* ── METRICS ROW ── */
-  .metrics-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .metric-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1.2rem 1.4rem;
-    position: relative;
-    overflow: hidden;
-    transition: border-color 0.3s ease;
-  }
-
-  .metric-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
-  }
-
-  .metric-label {
-    font-size: 0.58rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 0.6rem;
-  }
-
-  .metric-value {
-    font-family: 'Syne', sans-serif;
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--text-bright);
-    line-height: 1;
-    transition: color 0.3s ease;
-  }
-
-  .metric-value.positive { color: var(--green); }
-  .metric-value.negative { color: var(--red); }
-  .metric-value.gold { color: var(--gold); }
-
-  /* ── CONFIRM REBALANCE CARD ── */
-  .rebalance-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1.2rem 1.4rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 0.8rem;
-  }
-
-  .rebalance-card.has-rec {
-    border-color: rgba(0,217,126,0.3);
-    background: rgba(0,217,126,0.04);
-  }
-
-  .confirm-btn {
-    width: 100%;
-    padding: 0.5rem 1rem;
-    background: transparent;
-    border: 1px solid var(--green);
-    color: var(--green);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .confirm-btn:hover {
-    background: var(--green-dim);
-    box-shadow: 0 0 16px rgba(0,217,126,0.2);
-  }
-
-  .reset-btn {
-    width: 100%;
-    padding: 0.4rem 1rem;
-    background: transparent;
-    border: 1px solid var(--border2);
-    color: var(--muted);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .reset-btn:hover {
-    border-color: var(--red);
-    color: var(--red);
-  }
-
-  /* ── MAIN GRID ── */
-  .main-grid {
-    display: grid;
-    grid-template-columns: 2fr 1.4fr 1.4fr;
-    gap: 1rem;
-  }
-
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .panel-header {
-    padding: 0.8rem 1.2rem;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.58rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  .panel-body { padding: 1.2rem; }
-
-  /* ── WEIGHTS CHART ── */
-  .weights-chart { padding: 1rem 1.2rem; }
-
-  .asset-bar-row {
-    display: grid;
-    grid-template-columns: 90px 1fr 80px;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.4rem;
-  }
-
-  .asset-bar-row:last-child { margin-bottom: 0; }
-
-  .asset-name {
-    font-size: 0.7rem;
-    color: var(--text-strong);
-    letter-spacing: 0.05em;
-  }
-
-  .bar-track {
-    height: 28px;
-    background: var(--bg2);
-    border-radius: 2px;
-    position: relative;
-    overflow: visible;
-  }
-
-  .bar-current {
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 2px;
-    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 6px;
-    min-width: 2px;
-  }
-
-  .bar-current-label {
-    font-size: 0.65rem;
-    color: var(--text);
-    white-space: nowrap;
-  }
-
-  .bar-recommended {
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    border-radius: 2px;
-    opacity: 0.7;
-    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 6px;
-    min-width: 2px;
-  }
-
-  .bar-recommended-label {
-    font-size: 0.65rem;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .bar-delta {
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-align: right;
-  }
-
-  /* ── VIEWS ── */
-  .view-item {
-    padding: 0.8rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .view-item:last-child { border-bottom: none; }
-
-  .view-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 0.4rem;
-    gap: 0.5rem;
-  }
-
-  .view-asset-tag {
-    font-size: 0.6rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: var(--accent-dim);
-    padding: 2px 6px;
-    border-radius: 2px;
-    white-space: nowrap;
-  }
-
-  .view-return {
-    font-size: 0.8rem;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .view-desc {
-    font-size: 0.72rem;
-    color: var(--text);
-    line-height: 1.4;
-    margin-bottom: 0.4rem;
-  }
-
-  .view-conf-bar {
-    height: 2px;
-    background: var(--border2);
-    border-radius: 1px;
-    overflow: hidden;
-  }
-
-  .view-conf-fill {
-    height: 100%;
-    border-radius: 1px;
-    transition: width 0.6s ease;
-  }
-
-  /* ── EVENT LOG ── */
-  .event-item {
-    padding: 0.8rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .event-item:last-child { border-bottom: none; }
-
-  .event-time {
-    font-size: 0.6rem;
-    color: var(--muted);
-    margin-bottom: 0.3rem;
-  }
-
-  .event-transcript {
-    font-size: 0.7rem;
-    color: var(--text);
-    font-style: italic;
-    margin-bottom: 0.35rem;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .event-changes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    align-items: center;
-  }
-
-  .event-tag {
-    font-size: 0.58rem;
-    letter-spacing: 0.08em;
-    padding: 1px 5px;
-    border-radius: 2px;
-    border: 1px solid;
-  }
-
-  .event-sharpe {
-    font-size: 0.6rem;
-    color: var(--gold);
-    margin-left: auto;
-  }
-
-  /* ── EMPTY STATE ── */
-  .empty-state {
-    text-align: center;
-    padding: 2.5rem 1rem;
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-    line-height: 1.8;
-  }
-
-  /* ── MANUAL INPUT ── */
-  .input-section {
-    margin-top: 1rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .input-grid {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1rem;
-    padding: 1rem 1.2rem;
-  }
-
-  .input-fields { display: flex; flex-direction: column; gap: 0.5rem; }
-
-  .input-field {
-    width: 100%;
-    background: var(--bg2);
-    border: 1px solid var(--border2);
-    border-radius: 2px;
-    padding: 0.5rem 0.8rem;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--text-strong);
-    outline: none;
-    transition: border-color 0.2s ease;
-    resize: none;
-  }
-
-  .input-field::placeholder { color: var(--muted); }
-  .input-field:focus { border-color: var(--accent); }
-
-  .input-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    justify-content: flex-start;
-    padding-top: 0.1rem;
-  }
-
-  .analyse-btn {
-    padding: 0.5rem 1.2rem;
-    background: var(--accent);
-    border: none;
-    color: white;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-  }
-
-  .analyse-btn:hover { background: #6090ff; box-shadow: 0 0 16px var(--accent-glow); }
-  .analyse-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  .clear-btn {
-    padding: 0.4rem 1.2rem;
-    background: transparent;
-    border: 1px solid var(--border2);
-    color: var(--muted);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .clear-btn:hover { border-color: var(--red); color: var(--red); }
-
-  .feedback-msg {
-    padding: 0.4rem 1.2rem 0.8rem;
-    font-size: 0.68rem;
-    letter-spacing: 0.05em;
-  }
-
-  .feedback-msg.success { color: var(--green); }
-  .feedback-msg.error { color: var(--red); }
-
-  /* ── LOADING SHIMMER ── */
-  .shimmer {
-    background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: 3px;
-  }
-
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
-  /* ── TOAST ── */
-  .toast {
-    position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 4px;
-    padding: 0.8rem 1.2rem;
-    font-size: 0.7rem;
-    color: var(--text-strong);
-    z-index: 100;
-    transform: translateY(100px);
-    opacity: 0;
-    transition: all 0.3s ease;
-  }
-
-  .toast.show { transform: translateY(0); opacity: 1; }
-  .toast.success { border-color: rgba(0,217,126,0.4); color: var(--green); }
-  .toast.error { border-color: rgba(255,77,106,0.4); color: var(--red); }
-
-  /* ── SCROLLBAR ── */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-  /* ── RESPONSIVE ── */
-  @media (max-width: 1100px) {
-    .main-grid { grid-template-columns: 1fr 1fr; }
-    .main-grid .panel:first-child { grid-column: 1 / -1; }
-    .metrics-row { grid-template-columns: repeat(2, 1fr); }
-  }
-
-  @media (max-width: 700px) {
-    .main-grid { grid-template-columns: 1fr; }
-    .metrics-row { grid-template-columns: 1fr 1fr; }
-    .container { padding: 0 1rem 2rem; }
-  }
+/* ── THEME TOKENS ── */
+:root {
+  --bg: #050508;
+  --bg2: #08090f;
+  --surface: #0c0e18;
+  --surface2: #111420;
+  --border: #1a1e2e;
+  --border2: #222840;
+  --text: #8890a8;
+  --text-strong: #d8dce8;
+  --text-bright: #eef0f8;
+  --muted: #3a4060;
+  --accent: #4d7cfe;
+  --accent-dim: rgba(77,124,254,0.12);
+  --accent-glow: rgba(77,124,254,0.25);
+  --green: #00d97e;
+  --green-dim: rgba(0,217,126,0.1);
+  --red: #ff4d6a;
+  --red-dim: rgba(255,77,106,0.1);
+  --gold: #f0b429;
+  --gold-dim: rgba(240,180,41,0.1);
+  --grid-line: rgba(77,124,254,0.03);
+}
+
+[data-theme="light"] {
+  --bg: #f0f2f8;
+  --bg2: #e8eaf2;
+  --surface: #ffffff;
+  --surface2: #f4f6fc;
+  --border: #dde1ee;
+  --border2: #c8cede;
+  --text: #5a6080;
+  --text-strong: #1a1e30;
+  --text-bright: #0a0c18;
+  --muted: #9098b8;
+  --accent: #2a5ce8;
+  --accent-dim: rgba(42,92,232,0.08);
+  --accent-glow: rgba(42,92,232,0.2);
+  --green: #00a85e;
+  --green-dim: rgba(0,168,94,0.08);
+  --red: #d93050;
+  --red-dim: rgba(217,48,80,0.08);
+  --gold: #c88010;
+  --gold-dim: rgba(200,128,16,0.08);
+  --grid-line: rgba(42,92,232,0.04);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.3s ease;
+}
+
+.container {
+  position: relative;
+  z-index: 1;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 2rem 3rem;
+}
+
+/* ── HEADER ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.4rem 0 1.2rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.8rem;
+}
+
+.logo { display: flex; align-items: baseline; gap: 0.5rem; }
+.logo-mark {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-bright);
+  letter-spacing: -0.03em;
+}
+.logo-mark span { color: var(--accent); }
+.logo-sub {
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--border2);
+}
+
+.header-right { display: flex; align-items: center; gap: 1rem; }
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.75rem;
+  border-radius: 2px;
+  border: 1px solid var(--border2);
+  transition: all 0.3s ease;
+}
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.status-badge.listening  { border-color: rgba(77,124,254,0.4); color: var(--accent); background: var(--accent-dim); }
+.status-badge.listening .status-dot  { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.5s infinite; }
+.status-badge.processing { border-color: rgba(240,180,41,0.4); color: var(--gold); background: var(--gold-dim); }
+.status-badge.processing .status-dot { background: var(--gold); box-shadow: 0 0 8px var(--gold); animation: pulse 0.8s infinite; }
+.status-badge.speaking   { border-color: rgba(0,217,126,0.4); color: var(--green); background: var(--green-dim); }
+.status-badge.speaking .status-dot   { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 0.5s infinite; }
+
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:0.4; transform:scale(0.8); }
+}
+
+.last-updated { font-size: 0.58rem; color: var(--muted); letter-spacing: 0.05em; }
+
+/* Theme toggle */
+.theme-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 2px;
+  padding: 0.3rem 0.7rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── METRICS ROW ── */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.1rem 1.3rem;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.3s, border-color 0.3s;
+}
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
+}
+.metric-label {
+  font-size: 0.56rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+.metric-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  line-height: 1;
+  transition: color 0.3s;
+}
+.metric-value.positive { color: var(--green); }
+.metric-value.negative { color: var(--red); }
+
+.rebalance-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.1rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  transition: background 0.3s, border-color 0.3s;
+}
+.rebalance-card.has-rec { border-color: rgba(0,217,126,0.35); background: rgba(0,217,126,0.03); }
+
+.confirm-btn {
+  width: 100%;
+  padding: 0.45rem 1rem;
+  background: transparent;
+  border: 1px solid var(--green);
+  color: var(--green);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.confirm-btn:hover { background: var(--green-dim); box-shadow: 0 0 14px rgba(0,217,126,0.2); }
+
+.reset-btn {
+  width: 100%;
+  padding: 0.35rem 1rem;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.reset-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* ── MAIN GRID ── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1.8fr 1.3fr 1.3fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: background 0.3s, border-color 0.3s;
+}
+.panel-header {
+  padding: 0.75rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.56rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.panel-body { padding: 1.1rem 1.2rem; }
+
+/* ── VERTICAL BAR CHART ── */
+.vbar-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2rem;
+  padding: 1.2rem 1.2rem 0.5rem;
+  height: 200px;
+}
+
+.vbar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.vbar-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  width: 100%;
+  justify-content: center;
+  height: 140px;
+  position: relative;
+}
+
+.vbar {
+  flex: 1;
+  max-width: 36px;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.8s cubic-bezier(0.4,0,0.2,1), background 0.3s;
+  position: relative;
+  min-height: 2px;
+}
+
+.vbar.current {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+}
+
+.vbar.recommended {
+  border-radius: 2px 2px 0 0;
+  opacity: 0.85;
+  border: 1px solid;
+}
+
+.vbar-pct {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.6rem;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.vbar-label {
+  font-size: 0.62rem;
+  color: var(--text-strong);
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.vbar-delta {
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-align: center;
+  min-height: 1.1rem;
+}
+
+/* Flash animation on weight change */
+@keyframes flashGreen {
+  0%   { box-shadow: 0 0 0 0 rgba(0,217,126,0); }
+  30%  { box-shadow: 0 0 20px 6px rgba(0,217,126,0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(0,217,126,0); }
+}
+@keyframes flashRed {
+  0%   { box-shadow: 0 0 0 0 rgba(255,77,106,0); }
+  30%  { box-shadow: 0 0 20px 6px rgba(255,77,106,0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(255,77,106,0); }
+}
+.flash-up   { animation: flashGreen 1s ease-out; }
+.flash-down { animation: flashRed 1s ease-out; }
+
+/* ── SPARKLINE ── */
+.sparkline-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  padding: 0.8rem 1.2rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.sparkline-item { display: flex; flex-direction: column; gap: 0.3rem; }
+.sparkline-name { font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.sparkline-val  { font-size: 0.8rem; color: var(--text-strong); font-weight: 500; }
+.sparkline-svg  { width: 100%; height: 28px; }
+
+/* ── SHARPE LINE CHART ── */
+.sharpe-chart-wrap {
+  padding: 0.8rem 1.2rem 1rem;
+}
+
+/* ── VIEWS ── */
+.view-item {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.view-item:last-child { border-bottom: none; }
+.view-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.35rem;
+  gap: 0.5rem;
+}
+.view-asset-tag {
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 2px 6px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.view-return { font-size: 0.78rem; font-weight: 500; white-space: nowrap; }
+.view-desc { font-size: 0.7rem; color: var(--text); line-height: 1.4; margin-bottom: 0.35rem; }
+.view-conf-bar { height: 2px; background: var(--border2); border-radius: 1px; overflow: hidden; }
+.view-conf-fill { height: 100%; border-radius: 1px; transition: width 0.6s ease; }
+
+/* ── EVENT LOG ── */
+.event-item {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.event-item:last-child { border-bottom: none; }
+.event-time { font-size: 0.58rem; color: var(--muted); margin-bottom: 0.25rem; }
+.event-transcript {
+  font-size: 0.68rem;
+  color: var(--text);
+  font-style: italic;
+  margin-bottom: 0.3rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.event-changes { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.event-tag {
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 2px;
+  border: 1px solid;
+}
+.event-sharpe { font-size: 0.58rem; color: var(--gold); margin-left: auto; }
+
+/* ── SECOND ROW ── */
+.second-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  font-size: 0.68rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  line-height: 1.8;
+}
+
+/* ── MANUAL INPUT ── */
+.input-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: background 0.3s, border-color 0.3s;
+}
+.input-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+}
+.input-fields { display: flex; flex-direction: column; gap: 0.5rem; }
+.input-field {
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 2px;
+  padding: 0.5rem 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text-strong);
+  outline: none;
+  transition: border-color 0.2s, background 0.3s, color 0.3s;
+  resize: none;
+}
+.input-field::placeholder { color: var(--muted); }
+.input-field:focus { border-color: var(--accent); }
+.input-actions { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.1rem; }
+.analyse-btn {
+  padding: 0.5rem 1.2rem;
+  background: var(--accent);
+  border: none;
+  color: white;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.analyse-btn:hover { background: #6090ff; box-shadow: 0 0 16px var(--accent-glow); }
+.analyse-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.clear-btn {
+  padding: 0.4rem 1.2rem;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.clear-btn:hover { border-color: var(--red); color: var(--red); }
+.feedback-msg { padding: 0.3rem 1.2rem 0.8rem; font-size: 0.66rem; }
+.feedback-msg.success { color: var(--green); }
+.feedback-msg.error   { color: var(--red); }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 0.75rem 1.2rem;
+  font-size: 0.68rem;
+  color: var(--text-strong);
+  z-index: 100;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-color: rgba(0,217,126,0.4); color: var(--green); }
+.toast.error   { border-color: rgba(255,77,106,0.4); color: var(--red); }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+@media (max-width: 1100px) {
+  .main-grid { grid-template-columns: 1fr 1fr; }
+  .main-grid .panel:first-child { grid-column: 1 / -1; }
+  .metrics-row { grid-template-columns: repeat(2,1fr); }
+  .second-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .metrics-row { grid-template-columns: 1fr 1fr; }
+  .container { padding: 0 1rem 2rem; }
+}
 </style>
 </head>
 <body>
-
 <div class="container">
 
   <!-- HEADER -->
@@ -605,6 +569,7 @@
         <span id="statusText">LISTENING</span>
       </div>
       <div class="last-updated">UPDATED <span id="lastUpdated">—</span></div>
+      <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">☀ LIGHT</button>
     </div>
   </header>
 
@@ -625,23 +590,25 @@
     <div class="rebalance-card" id="rebalanceCard">
       <div class="metric-label">Rebalance</div>
       <div id="rebalanceContent">
-        <div class="metric-value" style="font-size:1rem; color: var(--muted); padding-top:0.3rem;">NONE PENDING</div>
+        <div class="metric-value" style="font-size:1rem;color:var(--muted);padding-top:0.3rem">NONE PENDING</div>
       </div>
+      <button class="reset-btn" onclick="resetState()">↺ RESET TO MARKET WEIGHTS</button>
     </div>
   </div>
 
-  <!-- MAIN GRID -->
+  <!-- MAIN GRID: weights + views + events -->
   <div class="main-grid">
 
-    <!-- Portfolio weights -->
+    <!-- Vertical bar chart + sparklines -->
     <div class="panel">
       <div class="panel-header">Portfolio Allocation</div>
-      <div class="weights-chart" id="weightsChart">
-        <div class="empty-state shimmer" style="height:120px"></div>
+      <div class="vbar-chart" id="vbarChart">
+        <div class="empty-state" style="height:140px;display:flex;align-items:center;justify-content:center;width:100%">Loading...</div>
       </div>
+      <div class="sparkline-row" id="sparklineRow"></div>
     </div>
 
-    <!-- Extracted views -->
+    <!-- Views -->
     <div class="panel">
       <div class="panel-header">Extracted Views</div>
       <div class="panel-body" id="viewsPanel">
@@ -649,14 +616,30 @@
       </div>
     </div>
 
-    <!-- Event log -->
+    <!-- Events -->
     <div class="panel">
       <div class="panel-header">Event Log</div>
-      <div class="panel-body" id="eventsPanel" style="padding: 0 1.2rem;">
+      <div class="panel-body" id="eventsPanel" style="padding:0 1.2rem">
         <div class="empty-state">No events yet.</div>
       </div>
     </div>
 
+  </div>
+
+  <!-- SECOND ROW: Sharpe chart + last transcript -->
+  <div class="second-grid">
+    <div class="panel">
+      <div class="panel-header">Sharpe Ratio · Evolution</div>
+      <div class="sharpe-chart-wrap">
+        <svg id="sharpeChart" width="100%" height="120" style="display:block"></svg>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Last Transcript</div>
+      <div class="panel-body">
+        <div id="lastTranscript" style="font-size:0.82rem;color:var(--text);font-style:italic;line-height:1.6">—</div>
+      </div>
+    </div>
   </div>
 
   <!-- MANUAL INPUT -->
@@ -677,303 +660,373 @@
 
 </div>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<!-- Firebase SDK -->
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, onSnapshot, updateDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { initializeApp }    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, onSnapshot, updateDoc, setDoc, getDoc }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCTPS7j8T00KHZmF6AkyFt_A7U-LxZu-44",
-  authDomain: "litterman-ai.firebaseapp.com",
+  apiKey: "AIzaSyBpfbNoabLyJEik2hFftKSwQ40kFO9EBGM",
+  authDomain: "litterman-ai-814e8.firebaseapp.com",
   projectId: "litterman-ai",
-  storageBucket: "litterman-ai.firebasestorage.app",
-  messagingSenderId: "1084835415345",
-  appId: "1:1084835415345:web:d964d07b784494ca151c10",
-  measurementId: "G-NRZXV2NEND"
+  storageBucket: "litterman-ai-814e8.firebasestorage.app",
+  messagingSenderId: "37191631729",
+  appId: "1:37191631799:web:7d1666e6554fc39e2e2cd0"
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-// ── Real-time listener ─────────────────────────────────────────────────────
+const db  = getFirestore(app);
 const stateRef = doc(db, 'litterman', 'state');
 
+// Track previous weights to detect changes for flash animation
+let prevWeights = {};
+
+// ── Real-time listener ──────────────────────────────────────────────────────
 onSnapshot(stateRef, (snap) => {
   if (!snap.exists()) return;
-  const state = snap.data();
-  renderDashboard(state);
+  renderDashboard(snap.data());
 });
 
-// ── Render ─────────────────────────────────────────────────────────────────
-window.renderDashboard = function(state) {
-  const portfolio = state.portfolio || {};
-  const current = portfolio.current || { Stocks_USA: 0.6, Stocks_EM: 0.3, Bonds_USA: 0.1 };
-  const recommended = portfolio.recommended || null;
-  const views = state.views || [];
-  const events = state.events || [];
-  const sharpe = state.sharpe_ratio;
-  const status = state.status || 'idle';
-  const lastUpdated = state.last_updated || '';
+// ── Main render ─────────────────────────────────────────────────────────────
+function renderDashboard(state) {
+  const portfolio    = state.portfolio || {};
+  const current      = portfolio.current     || { Stocks_USA:0.6, Stocks_EM:0.3, Bonds_USA:0.1 };
+  const recommended  = portfolio.recommended || null;
+  const views        = state.views   || [];
+  const events       = state.events  || [];
+  const sharpe       = state.sharpe_ratio;
+  const status       = state.status  || 'idle';
+  const lastUpdated  = state.last_updated || '';
 
-  // Status badge
+  // Status
   const badge = document.getElementById('statusBadge');
-  const statusText = document.getElementById('statusText');
   badge.className = 'status-badge ' + status;
-  const statusLabels = { idle: 'IDLE', listening: 'LISTENING', processing: 'PROCESSING', speaking: 'SPEAKING' };
-  statusText.textContent = statusLabels[status] || status.toUpperCase();
-
-  // Last updated
+  const labels = { idle:'IDLE', listening:'LISTENING', processing:'PROCESSING', speaking:'SPEAKING' };
+  document.getElementById('statusText').textContent = labels[status] || status.toUpperCase();
   const ts = lastUpdated.includes('T') ? lastUpdated.split('T')[1] : lastUpdated;
   document.getElementById('lastUpdated').textContent = ts || '—';
 
-  // Sharpe
+  // Sharpe metric
   const sharpeEl = document.getElementById('sharpeValue');
-  if (sharpe === null || sharpe === undefined) {
-    sharpeEl.textContent = '—';
-    sharpeEl.className = 'metric-value';
-  } else {
-    sharpeEl.textContent = sharpe.toFixed(4);
-    sharpeEl.className = 'metric-value ' + (sharpe >= 0 ? 'positive' : 'negative');
-  }
+  if (sharpe == null) { sharpeEl.textContent = '—'; sharpeEl.className = 'metric-value'; }
+  else { sharpeEl.textContent = sharpe.toFixed(4); sharpeEl.className = 'metric-value ' + (sharpe >= 0 ? 'positive' : 'negative'); }
 
-  // Counts
   document.getElementById('eventsCount').textContent = events.length;
-  document.getElementById('viewsCount').textContent = views.length;
+  document.getElementById('viewsCount').textContent  = views.length;
 
   // Rebalance card
   renderRebalanceCard(recommended);
 
-  // Weights chart
-  renderWeights(current, recommended);
+  // Vertical bars (with flash on change)
+  renderVBars(current, recommended);
 
-  // Views
+  // Sparklines
+  renderSparklines(events, Object.keys(current));
+
+  // Sharpe line chart
+  renderSharpeChart(events);
+
+  // Views & events
   renderViews(views);
-
-  // Events
   renderEvents(events);
-};
 
+  // Last transcript
+  const lt = events[0]?.transcript || '—';
+  document.getElementById('lastTranscript').textContent = `"${lt}"`;
+
+  // Update prev weights
+  prevWeights = { ...current };
+}
+
+// ── Rebalance card ──────────────────────────────────────────────────────────
 function renderRebalanceCard(recommended) {
-  const card = document.getElementById('rebalanceCard');
+  const card    = document.getElementById('rebalanceCard');
   const content = document.getElementById('rebalanceContent');
   if (recommended) {
     card.className = 'rebalance-card has-rec';
-    content.innerHTML = `<button class="confirm-btn" onclick="confirmRebalance()">✓ CONFIRM REBALANCE</button>`;
+    content.innerHTML = `<button class="confirm-btn" onclick="window.confirmRebalance()">✓ CONFIRM REBALANCE</button>`;
   } else {
     card.className = 'rebalance-card';
-    content.innerHTML = `<div class="metric-value" style="font-size:1rem; color: var(--muted); padding-top:0.3rem;">NONE PENDING</div>`;
+    content.innerHTML = `<div class="metric-value" style="font-size:1rem;color:var(--muted);padding-top:0.3rem">NONE PENDING</div>`;
   }
 }
 
-function renderWeights(current, recommended) {
-  const assets = Object.keys(current);
-  const maxVal = 85;
-  let html = '';
+// ── Vertical bar chart ──────────────────────────────────────────────────────
+function renderVBars(current, recommended) {
+  const assets  = Object.keys(current);
+  const maxVal  = Math.max(...assets.map(a => Math.max(current[a], recommended?.[a] || 0)), 0.75);
+  const trackH  = 140;
 
+  let html = '';
   for (const asset of assets) {
     const cur = current[asset] || 0;
     const rec = recommended ? (recommended[asset] || 0) : null;
     const delta = rec !== null ? (rec - cur) * 100 : null;
-    const isUp = delta !== null && delta > 0;
-    const isDown = delta !== null && delta < 0;
-    const color = isUp ? 'var(--green)' : isDown ? 'var(--red)' : 'var(--accent)';
-    const colorDim = isUp ? 'var(--green-dim)' : isDown ? 'var(--red-dim)' : 'var(--accent-dim)';
-    const deltaStr = delta !== null ? (delta >= 0 ? '+' : '') + delta.toFixed(1) + 'pp' : '';
-    const deltaColor = isUp ? 'var(--green)' : isDown ? 'var(--red)' : 'var(--muted)';
+    const isUp  = delta !== null && delta > 0.4;
+    const isDn  = delta !== null && delta < -0.4;
+    const color    = isUp ? 'var(--green)'  : isDn ? 'var(--red)'  : 'var(--accent)';
+    const colorDim = isUp ? 'var(--green-dim)' : isDn ? 'var(--red-dim)' : 'var(--accent-dim)';
+    const deltaStr = delta !== null && Math.abs(delta) >= 0.1
+      ? (delta >= 0 ? '+' : '') + delta.toFixed(1) + 'pp' : '';
+    const deltaColor = isUp ? 'var(--green)' : isDn ? 'var(--red)' : 'var(--muted)';
 
-    const curPct = (cur * 100 / maxVal * 100).toFixed(1);
-    const recPct = rec !== null ? (rec * 100 / maxVal * 100).toFixed(1) : null;
+    const curH = Math.max(2, (cur / maxVal) * trackH);
+    const recH = rec !== null ? Math.max(2, (rec / maxVal) * trackH) : null;
+
+    // Flash class based on change vs previous
+    const prevW = prevWeights[asset];
+    let flashClass = '';
+    if (prevW !== undefined && Math.abs(cur - prevW) > 0.005) {
+      flashClass = cur > prevW ? 'flash-up' : 'flash-down';
+    }
+
+    const shortName = asset.replace('_', ' ').split(' ').map((w,i) => i===0 ? w : w[0]).join(' ');
 
     html += `
-      <div class="asset-bar-row">
-        <div class="asset-name">${asset.replace('_', ' ')}</div>
-        <div class="bar-track">
-          <div class="bar-current" style="width:${curPct}%">
-            <span class="bar-current-label">${(cur*100).toFixed(1)}%</span>
+      <div class="vbar-group">
+        <div class="vbar-bars">
+          <div class="vbar current ${flashClass}" style="height:${curH}px" id="vbar-${asset}">
+            <span class="vbar-pct" style="color:var(--text)">${(cur*100).toFixed(1)}%</span>
           </div>
           ${rec !== null ? `
-          <div class="bar-recommended" style="width:${recPct}%; background:${colorDim}; border-color:${color};">
-            <span class="bar-recommended-label" style="color:${color}">${(rec*100).toFixed(1)}%</span>
+          <div class="vbar recommended" style="height:${recH}px;background:${colorDim};border-color:${color}">
+            <span class="vbar-pct" style="color:${color}">${(rec*100).toFixed(1)}%</span>
           </div>` : ''}
         </div>
-        <div class="bar-delta" style="color:${deltaColor}">${deltaStr || (cur*100).toFixed(1)+'%'}</div>
+        <div class="vbar-label">${shortName}</div>
+        <div class="vbar-delta" style="color:${deltaColor}">${deltaStr}</div>
       </div>`;
   }
 
-  document.getElementById('weightsChart').innerHTML = html || '<div class="empty-state">No data</div>';
+  document.getElementById('vbarChart').innerHTML = html;
 }
 
+// ── Sparklines ──────────────────────────────────────────────────────────────
+function renderSparklines(events, assets) {
+  if (!events.length) { document.getElementById('sparklineRow').innerHTML = ''; return; }
+
+  let html = '';
+  for (const asset of assets) {
+    // Extract weight history from events (most recent last)
+    const history = events.slice().reverse().map(e => e.weights_after?.[asset]).filter(v => v != null);
+    if (!history.length) continue;
+
+    const current = events[0]?.weights_after?.[asset] || 0;
+    const first   = history[0];
+    const trend   = current - first;
+    const color   = trend > 0.005 ? 'var(--green)' : trend < -0.005 ? 'var(--red)' : 'var(--accent)';
+
+    const svgPath = buildSparkPath(history, 80, 26);
+    const shortName = asset.replace('_', ' ').split(' ').map((w,i) => i===0 ? w : w[0]).join(' ');
+
+    html += `
+      <div class="sparkline-item">
+        <div class="sparkline-name">${shortName}</div>
+        <div class="sparkline-val" style="color:${color}">${(current*100).toFixed(1)}%</div>
+        <svg class="sparkline-svg" viewBox="0 0 80 28">
+          <path d="${svgPath}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>`;
+  }
+
+  document.getElementById('sparklineRow').innerHTML = html;
+}
+
+function buildSparkPath(values, w, h) {
+  if (values.length < 2) return '';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 0.01;
+  const pad = 3;
+  return values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+}
+
+// ── Sharpe line chart ───────────────────────────────────────────────────────
+function renderSharpeChart(events) {
+  const svg = document.getElementById('sharpeChart');
+  const W = svg.clientWidth || 500;
+  const H = 120;
+  const pad = { top: 16, right: 20, bottom: 24, left: 44 };
+
+  const points = events.slice().reverse().map((e, i) => ({
+    x: i,
+    y: e.sharpe_after ?? 0,
+    ts: (e.timestamp || '').split('T')[1] || '',
+  }));
+
+  if (points.length < 2) {
+    svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="var(--muted)">Not enough data yet</text>`;
+    return;
+  }
+
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const minY = Math.min(...ys, -0.1);
+  const maxY = Math.max(...ys, 0.1);
+  const rangeY = maxY - minY || 0.2;
+
+  const toX = i => pad.left + (i / (points.length - 1)) * (W - pad.left - pad.right);
+  const toY = v => pad.top + (1 - (v - minY) / rangeY) * (H - pad.top - pad.bottom);
+
+  // Zero line
+  const zeroY = toY(0);
+  const pathD = points.map((p, i) => `${i===0?'M':'L'}${toX(i).toFixed(1)},${toY(p.y).toFixed(1)}`).join(' ');
+
+  // Gradient fill
+  const fillD = pathD + ` L${toX(points.length-1).toFixed(1)},${zeroY.toFixed(1)} L${toX(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
+
+  // Dots
+  const dots = points.map((p, i) => {
+    const col = p.y >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<circle cx="${toX(i).toFixed(1)}" cy="${toY(p.y).toFixed(1)}" r="3" fill="${col}" stroke="var(--surface)" stroke-width="1.5"/>`;
+  }).join('');
+
+  // X axis labels (first and last)
+  const xLabels = `
+    <text x="${toX(0)}" y="${H - 4}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">${points[0].ts}</text>
+    <text x="${toX(points.length-1)}" y="${H - 4}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">${points[points.length-1].ts}</text>`;
+
+  // Y axis labels
+  const yLabels = [minY, 0, maxY].map(v => {
+    const y = toY(v);
+    const col = v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : 'var(--muted)';
+    return `<text x="${pad.left - 6}" y="${y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-family="JetBrains Mono" font-size="9" fill="${col}">${v.toFixed(2)}</text>`;
+  }).join('');
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="sharpeFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.15"/>
+        <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <!-- Zero line -->
+    <line x1="${pad.left}" y1="${zeroY.toFixed(1)}" x2="${W - pad.right}" y2="${zeroY.toFixed(1)}" stroke="var(--border2)" stroke-width="1" stroke-dasharray="3,3"/>
+    <!-- Fill -->
+    <path d="${fillD}" fill="url(#sharpeFill)"/>
+    <!-- Line -->
+    <path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}
+    ${xLabels}
+    ${yLabels}`;
+}
+
+// ── Views ───────────────────────────────────────────────────────────────────
 function renderViews(views) {
   const panel = document.getElementById('viewsPanel');
   if (!views.length) {
     panel.innerHTML = '<div class="empty-state">No views extracted yet.<br>Speak market news to begin.</div>';
     return;
   }
-
-  let html = '';
-  for (const v of views) {
-    const asset = v.asset || v.asset_long || '';
-    const ret = v.expected_return || 0;
-    const conf = v.confidence || 0;
-    const retStr = (ret >= 0 ? '+' : '') + (ret * 100).toFixed(1) + '%';
-    const retColor = ret >= 0 ? 'var(--green)' : 'var(--red)';
-    const confColor = conf >= 0.7 ? 'var(--green)' : conf >= 0.4 ? 'var(--gold)' : 'var(--red)';
-
-    html += `
+  panel.innerHTML = views.map(v => {
+    const asset   = v.asset || v.asset_long || '';
+    const ret     = v.expected_return || 0;
+    const conf    = v.confidence || 0;
+    const retStr  = (ret >= 0 ? '+' : '') + (ret*100).toFixed(1) + '%';
+    const retCol  = ret >= 0 ? 'var(--green)' : 'var(--red)';
+    const confCol = conf >= 0.7 ? 'var(--green)' : conf >= 0.4 ? 'var(--gold)' : 'var(--red)';
+    return `
       <div class="view-item">
         <div class="view-top">
           <span class="view-asset-tag">${asset}</span>
-          <span class="view-return" style="color:${retColor}">${retStr}</span>
+          <span class="view-return" style="color:${retCol}">${retStr}</span>
         </div>
         <div class="view-desc">${v.description || ''}</div>
         <div class="view-conf-bar">
-          <div class="view-conf-fill" style="width:${conf*100}%; background:${confColor}"></div>
+          <div class="view-conf-fill" style="width:${conf*100}%;background:${confCol}"></div>
         </div>
       </div>`;
-  }
-
-  panel.innerHTML = html;
+  }).join('');
 }
 
+// ── Events ──────────────────────────────────────────────────────────────────
 function renderEvents(events) {
   const panel = document.getElementById('eventsPanel');
-  if (!events.length) {
-    panel.innerHTML = '<div class="empty-state">No events yet.</div>';
-    return;
-  }
-
-  let html = '';
-  for (const evt of events.slice(0, 8)) {
-    const ts = (evt.timestamp || '').includes('T') ? evt.timestamp.split('T')[1] : evt.timestamp || '';
-    const transcript = (evt.transcript || '').slice(0, 100);
+  if (!events.length) { panel.innerHTML = '<div class="empty-state">No events yet.</div>'; return; }
+  panel.innerHTML = events.slice(0, 8).map(evt => {
+    const ts = (evt.timestamp||'').includes('T') ? evt.timestamp.split('T')[1] : evt.timestamp||'';
+    const transcript = (evt.transcript||'').slice(0, 100);
     const sharpe = evt.sharpe_after;
-    const wb = evt.weights_before || {};
-    const wa = evt.weights_after || {};
-
-    const changes = [];
-    for (const a of Object.keys(wa)) {
-      if (a in wb) {
-        const d = (wa[a] - wb[a]) * 100;
-        if (Math.abs(d) >= 0.5) {
-          const col = d >= 0 ? 'var(--green)' : 'var(--red)';
-          const border = d >= 0 ? 'rgba(0,217,126,0.3)' : 'rgba(255,77,106,0.3)';
-          const sign = d >= 0 ? '+' : '';
-          changes.push(`<span class="event-tag" style="color:${col};border-color:${border}">${a.split('_')[0]} ${sign}${d.toFixed(1)}pp</span>`);
-        }
-      }
-    }
-
-    html += `
+    const wb = evt.weights_before || {}, wa = evt.weights_after || {};
+    const changes = Object.keys(wa).filter(a => a in wb).map(a => {
+      const d = (wa[a] - wb[a]) * 100;
+      if (Math.abs(d) < 0.5) return '';
+      const col    = d >= 0 ? 'var(--green)' : 'var(--red)';
+      const border = d >= 0 ? 'rgba(0,217,126,0.3)' : 'rgba(255,77,106,0.3)';
+      return `<span class="event-tag" style="color:${col};border-color:${border}">${a.split('_')[0]} ${d>=0?'+':''}${d.toFixed(1)}pp</span>`;
+    }).filter(Boolean);
+    return `
       <div class="event-item">
         <div class="event-time">${ts}</div>
         <div class="event-transcript">"${transcript}..."</div>
         <div class="event-changes">
           ${changes.join('')}
-          ${sharpe !== undefined && sharpe !== null ? `<span class="event-sharpe">Sharpe ${sharpe.toFixed(4)}</span>` : ''}
+          ${sharpe != null ? `<span class="event-sharpe">Sharpe ${sharpe.toFixed(4)}</span>` : ''}
         </div>
       </div>`;
-  }
-
-  panel.innerHTML = html;
+  }).join('');
 }
 
-// ── Confirm rebalance (write to Firestore) ─────────────────────────────────
+// ── Confirm rebalance ───────────────────────────────────────────────────────
 window.confirmRebalance = async function() {
   try {
-    // We read the current doc, move recommended → current
-    const { getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     const snap = await getDoc(stateRef);
     if (!snap.exists()) return;
-    const state = snap.data();
-    const recommended = state.portfolio?.recommended;
-    if (!recommended) return;
-
-    await updateDoc(stateRef, {
-      'portfolio.current': recommended,
-      'portfolio.recommended': null,
-    });
-
+    const rec = snap.data().portfolio?.recommended;
+    if (!rec) return;
+    await updateDoc(stateRef, { 'portfolio.current': rec, 'portfolio.recommended': null });
     showToast('Rebalance confirmed ✓', 'success');
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
 };
 
-// ── Reset state ────────────────────────────────────────────────────────────
+// ── Reset ───────────────────────────────────────────────────────────────────
 window.resetState = async function() {
-  if (!confirm('Reset portfolio to market weights? This will clear all events and views.')) return;
+  if (!confirm('Reset portfolio to market weights? Clears all events and views.')) return;
   try {
     await setDoc(stateRef, {
-      portfolio: {
-        current: { Stocks_USA: 0.6, Stocks_EM: 0.3, Bonds_USA: 0.1 },
-        recommended: null,
-      },
-      views: [],
-      sharpe_ratio: null,
-      events: [],
-      status: 'idle',
+      portfolio: { current: { Stocks_USA:0.6, Stocks_EM:0.3, Bonds_USA:0.1 }, recommended: null },
+      views: [], sharpe_ratio: null, events: [], status: 'idle',
       last_updated: new Date().toISOString().slice(0,19),
     });
-    showToast('Portfolio reset to market weights', 'success');
-  } catch(e) {
-    showToast('Error: ' + e.message, 'error');
-  }
+    showToast('Portfolio reset ✓', 'success');
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
 };
 
-// ── Toast ──────────────────────────────────────────────────────────────────
-window.showToast = function(msg, type = '') {
+// ── Toast ───────────────────────────────────────────────────────────────────
+window.showToast = function(msg, type='') {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show ' + type;
+  t.textContent = msg; t.className = 'toast show ' + type;
   setTimeout(() => t.className = 'toast', 3000);
 };
 
-// ── Manual analyse (calls Cloud Run backend) ───────────────────────────────
+// ── Manual analyse ──────────────────────────────────────────────────────────
 window.analyseInput = async function() {
-  const url = document.getElementById('urlInput').value.trim();
+  const url  = document.getElementById('urlInput').value.trim();
   const text = document.getElementById('textInput').value.trim();
-  const btn = document.getElementById('analyseBtn');
-  const feedback = document.getElementById('feedbackMsg');
-
-  if (!url && !text) {
-    feedback.className = 'feedback-msg error';
-    feedback.textContent = 'Paste a URL or type a market scenario first.';
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '⟳ PROCESSING...';
-  feedback.className = 'feedback-msg';
-  feedback.textContent = '';
-
+  const btn  = document.getElementById('analyseBtn');
+  const fb   = document.getElementById('feedbackMsg');
+  if (!url && !text) { fb.className='feedback-msg error'; fb.textContent='Paste a URL or type a scenario first.'; return; }
+  btn.disabled = true; btn.textContent = '⟳ PROCESSING...';
+  fb.className = 'feedback-msg'; fb.textContent = '';
   try {
-    const payload = url ? { url } : { text };
     const res = await fetch('/analyse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(url ? {url} : {text}),
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || res.statusText);
-    }
-
+    if (!res.ok) { const e = await res.json().catch(()=>({error:res.statusText})); throw new Error(e.error||res.statusText); }
     const data = await res.json();
-    feedback.className = 'feedback-msg success';
-    feedback.textContent = `✓ Analysis complete — Sharpe ${data.sharpe_ratio?.toFixed(4) || '—'}`;
+    fb.className = 'feedback-msg success';
+    fb.textContent = `✓ Analysis complete — Sharpe ${data.sharpe_ratio?.toFixed(4)||'—'}`;
     showToast('Analysis complete ✓', 'success');
-
   } catch(e) {
-    feedback.className = 'feedback-msg error';
-    feedback.textContent = 'Error: ' + e.message.slice(0, 120);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '⟶ ANALYSE';
-  }
+    fb.className = 'feedback-msg error'; fb.textContent = 'Error: ' + e.message.slice(0,120);
+  } finally { btn.disabled=false; btn.textContent='⟶ ANALYSE'; }
 };
 
 window.clearInput = function() {
@@ -982,15 +1035,35 @@ window.clearInput = function() {
   document.getElementById('feedbackMsg').textContent = '';
 };
 
-// ── Add reset button to rebalance area ────────────────────────────────────
-// Inject reset button into page after load
-document.addEventListener('DOMContentLoaded', () => {
-  const resetArea = document.createElement('div');
-  resetArea.style.cssText = 'margin-top:0.5rem; padding: 0 1.4rem 1.2rem;';
-  resetArea.innerHTML = `<button class="reset-btn" onclick="resetState()" style="width:100%">↺ RESET TO MARKET WEIGHTS</button>`;
-  document.querySelector('.rebalance-card').appendChild(resetArea);
-});
+</script>
 
+<script>
+// ── Theme toggle (non-module) ───────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn  = document.getElementById('themeToggle');
+  if (html.dataset.theme === 'dark') {
+    html.dataset.theme = 'light';
+    btn.textContent = '☾ DARK';
+    localStorage.setItem('lt-theme', 'light');
+  } else {
+    html.dataset.theme = 'dark';
+    btn.textContent = '☀ LIGHT';
+    localStorage.setItem('lt-theme', 'dark');
+  }
+}
+
+// Restore saved theme
+(function() {
+  const saved = localStorage.getItem('lt-theme');
+  if (saved === 'light') {
+    document.documentElement.dataset.theme = 'light';
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('themeToggle');
+      if (btn) btn.textContent = '☾ DARK';
+    });
+  }
+})();
 </script>
 </body>
 </html>
