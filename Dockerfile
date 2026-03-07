@@ -21,7 +21,7 @@ COPY dashboard.py .
 COPY core/ ./core/
 
 RUN mkdir -p /root/.streamlit
-COPY streamlit_config.toml /root/.streamlit/config.toml
+COPY .streamlit_config.toml /root/.streamlit/config.toml
 
 ENV PORT=8080
 

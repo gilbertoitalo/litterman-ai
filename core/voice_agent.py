@@ -8,12 +8,11 @@ from google import genai
 from google.genai import types
 from .bl_engine import BlackLittermanEngine
 from .gemini_agent import run_bl_pipeline, format_bl_result_for_voice
-from .shared_state import set_status, push_bl_result
+from .shared_state import get_state, set_status, push_bl_result
 
 ASSETS = ['Stocks_USA', 'Stocks_EM', 'Bonds_USA']
-WEIGHTS = np.array([0.60, 0.30, 0.10])
+WEIGHTS = np.array([0.60, 0.30, 0.10])   # fallback / reference only
 COV = np.diag([0.0225, 0.0324, 0.0025])
-ORIGINAL_WEIGHTS_DICT = {'Stocks_USA': 0.60, 'Stocks_EM': 0.30, 'Bonds_USA': 0.10}
 
 SYSTEM_PROMPT = """
 You are Litterman, a voice assistant for asset managers.
@@ -209,11 +208,19 @@ Text: {transcript}"""
 
             if is_market_news:
                 print("[BL Listener] Running Black-Litterman pipeline...")
+
+                # Read current weights from Firestore so post-rebalance runs
+                # use the confirmed weights, not the hardcoded market weights.
+                current_state = await asyncio.to_thread(get_state)
+                current_weights_dict = current_state["portfolio"]["current"]
+                weights_live = np.array([current_weights_dict[a] for a in ASSETS])
+                print(f"[BL Listener] Using live weights: { {a: round(current_weights_dict[a], 4) for a in ASSETS} }")
+
                 bl_result = await asyncio.to_thread(
                     run_bl_pipeline,
                     transcript,
                     ASSETS,
-                    WEIGHTS,
+                    weights_live,
                     COV
                 )
 
@@ -224,7 +231,7 @@ Text: {transcript}"""
                     sharpe_after=bl_result["sharpe_ratio"],
                 )
 
-                prompt = format_bl_result_for_voice(bl_result, ORIGINAL_WEIGHTS_DICT)
+                prompt = format_bl_result_for_voice(bl_result, current_weights_dict)
                 set_status("speaking")
 
                 # send_realtime_input(text=) reliably triggers an audio response.
