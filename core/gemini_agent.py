@@ -1,9 +1,10 @@
 import json
 import numpy as np
 from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 import os
-from core.bl_engine import BlackLittermanEngine
+from bl_engine import BlackLittermanEngine
 
 load_dotenv()
 
@@ -81,16 +82,24 @@ Article text (first 8000 chars):
 def extract_views_from_news(news_text: str, assets: list) -> dict:
     """
     Uses Gemini to extract Black-Litterman views from a news article.
+    Google Search Grounding is enabled so the model anchors its view
+    extraction to current market data (yields, inflation, positioning)
+    rather than relying solely on training knowledge.
 
     Returns dict with:
         - views: list of view descriptions
         - P: pick matrix
         - Q: expected returns vector
         - confidence: confidence level per view (0 to 1)
+        - grounding_sources: list of URLs used by Grounding (if any)
     """
     prompt = f"""
 You are a quantitative analyst assistant. Analyse the following news and extract 
 Black-Litterman views for a portfolio with these assets: {assets}
+
+Use your web search capability to ground your analysis in current market data —
+check current yield levels, inflation readings, central bank positioning, and
+recent equity performance before estimating expected returns.
 
 News:
 {news_text}
@@ -123,15 +132,35 @@ Rules:
 - for rate hike news: Bonds_USA expected_return should be NEGATIVE (price falls as yields rise)
 - for rate hike news: Stocks_USA and Stocks_EM expected_return should be slightly NEGATIVE
 """
+
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=prompt
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())]
+        )
     )
+
+    # Extract grounding metadata (search queries + source URLs) if available
+    grounding_sources = []
+    if (
+        response.candidates
+        and response.candidates[0].grounding_metadata
+        and response.candidates[0].grounding_metadata.grounding_chunks
+    ):
+        for chunk in response.candidates[0].grounding_metadata.grounding_chunks:
+            if chunk.web and chunk.web.uri:
+                grounding_sources.append(chunk.web.uri)
+
+    if grounding_sources:
+        print(f"[Grounding] Used {len(grounding_sources)} source(s): {grounding_sources[:3]}")
 
     text = response.text.strip()
     text = text.replace("```json", "").replace("```", "").strip()
 
-    return json.loads(text)
+    views_data = json.loads(text)
+    views_data["grounding_sources"] = grounding_sources
+    return views_data
 
 
 def views_to_matrices(views_data: dict, assets: list):
@@ -162,12 +191,12 @@ def views_to_matrices(views_data: dict, assets: list):
 
 def run_bl_pipeline(news_text: str, assets: list, weights: np.ndarray, cov: np.ndarray) -> dict:
     """
-    Full pipeline: news -> Gemini views -> Black-Litterman -> optimal weights.
+    Full pipeline: news -> Gemini views (grounded) -> Black-Litterman -> optimal weights.
 
-    Returns dict with views, optimal weights, and Sharpe ratio.
+    Returns dict with views, optimal weights, Sharpe ratio, and grounding sources.
     Ready to be injected into the voice session as a structured prompt.
     """
-    # Step 1 — extract views from news
+    # Step 1 — extract views from news (with Google Search Grounding)
     views_data = extract_views_from_news(news_text, assets)
 
     # Step 2 — convert to matrices
@@ -181,7 +210,8 @@ def run_bl_pipeline(news_text: str, assets: list, weights: np.ndarray, cov: np.n
     return {
         "views": views_data["views"],
         "weights": result["weights"],
-        "sharpe_ratio": result["sharpe_ratio"]
+        "sharpe_ratio": result["sharpe_ratio"],
+        "grounding_sources": views_data.get("grounding_sources", [])
     }
 
 
@@ -236,7 +266,7 @@ if __name__ == "__main__":
     priced in fewer rate cuts for the year ahead.
     """
 
-    print("Running full BL pipeline...\n")
+    print("Running full BL pipeline with Google Search Grounding...\n")
     result = run_bl_pipeline(news, assets, weights, cov)
 
     print("Views:")
@@ -248,3 +278,8 @@ if __name__ == "__main__":
         print(f"  {asset}: {weight*100:.2f}%")
 
     print(f"\nSharpe Ratio: {result['sharpe_ratio']:.4f}")
+
+    if result["grounding_sources"]:
+        print(f"\nGrounding Sources ({len(result['grounding_sources'])}):")
+        for url in result["grounding_sources"]:
+            print(f"  - {url}")
