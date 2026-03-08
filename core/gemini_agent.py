@@ -1,10 +1,14 @@
+try:
+    from core.bl_engine import BlackLittermanEngine
+except ImportError:
+    from bl_engine import BlackLittermanEngine
 import json
 import numpy as np
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import os
-from bl_engine import BlackLittermanEngine
+from core.bl_engine import BlackLittermanEngine
 
 load_dotenv()
 
