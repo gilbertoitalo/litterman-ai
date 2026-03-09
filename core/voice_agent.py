@@ -34,6 +34,7 @@ OUTPUT_RATE = 24000
 CHUNK = 1024
 
 DEBOUNCE_SECONDS = 4.0
+BL_COOLDOWN_SECONDS = 20  # prevents BL re-trigger, but never blocks voice
 
 MODEL = "models/gemini-2.5-flash-native-audio-latest"
 CONFIG = types.LiveConnectConfig(
@@ -59,7 +60,13 @@ transcript_queue = asyncio.Queue()
 
 agent_is_speaking = asyncio.Event()
 mic_stream = None
-_bl_processing = asyncio.Event()
+interrupt_event = asyncio.Event()  # signals play_audio to drop buffered chunks
+
+# Two separate flags — these are intentionally distinct:
+# _bl_running: True while the BL pipeline is actively executing (prevents duplicate runs)
+# _bl_cooldown: True after BL completes, blocks re-trigger but NOT normal conversation
+_bl_running = asyncio.Event()
+_bl_cooldown = asyncio.Event()
 
 
 def _normalise_transcript(raw: str) -> str:
@@ -97,44 +104,56 @@ async def send_realtime(session):
 
 async def receive_audio(session):
     while True:
-        turn = session.receive()
         transcript_chunks = []
 
-        async for response in turn:
-            if response.server_content:
+        async for response in session.receive():
+            if not response.server_content:
+                continue
 
-                if response.server_content.input_transcription:
-                    chunk = response.server_content.input_transcription.text
-                    if chunk:
-                        transcript_chunks.append(chunk)
+            # ── Barge-in: API signals user started speaking ──
+            if response.server_content.interrupted:
+                print("\n--- BARGE-IN DETECTED ---")
+                interrupt_event.set()
+                while not audio_queue_output.empty():
+                    try:
+                        audio_queue_output.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                agent_is_speaking.clear()
+                continue
 
-                if response.server_content.model_turn:
-                    agent_is_speaking.set()
-                    for part in response.server_content.model_turn.parts:
-                        if part.text:
-                            print(f"Litterman: {part.text}")
-                        if part.inline_data and isinstance(part.inline_data.data, bytes):
-                            audio_queue_output.put_nowait(part.inline_data.data)
+            if response.server_content.input_transcription:
+                chunk = response.server_content.input_transcription.text
+                if chunk:
+                    transcript_chunks.append(chunk)
 
-        agent_is_speaking.clear()
+            if response.server_content.model_turn:
+                interrupt_event.clear()  # new agent speech — reset interrupt
+                agent_is_speaking.set()
+                for part in response.server_content.model_turn.parts:
+                    if part.text:
+                        print(f"Litterman: {part.text}")
+                    if part.inline_data and isinstance(part.inline_data.data, bytes):
+                        audio_queue_output.put_nowait(part.inline_data.data)
+
+            if response.server_content.turn_complete:
+                agent_is_speaking.clear()
+                break
 
         if transcript_chunks:
             raw = "".join(transcript_chunks)
             full_transcript = _normalise_transcript(raw)
             print(f"[turn] {full_transcript}")
 
-            # Always forward to BL — bl_listener decides if it's market news
-            # _bl_processing flag prevents duplicate processing during cooldown
-            if not _bl_processing.is_set() and len(full_transcript) >= 15:
-                await _raw_transcript_queue.put(full_transcript)
+            if len(full_transcript) < 15:
+                print(f"[receive_audio] Skipped: too short ({len(full_transcript)} chars)")
+            elif _bl_running.is_set():
+                print("[receive_audio] Skipped: BL pipeline running")
+            elif _bl_cooldown.is_set():
+                print("[receive_audio] BL cooldown — forwarding to conversation only")
+                await session.send_realtime_input(text=full_transcript)
             else:
-                reason = []
-                if _bl_processing.is_set():
-                    reason.append("BL cooldown active")
-                if len(full_transcript) < 15:
-                    reason.append(f"too short ({len(full_transcript)} chars)")
-                if reason:
-                    print(f"[receive_audio] Skipped: {', '.join(reason)}")
+                await _raw_transcript_queue.put(full_transcript)
 
         print("[Listening...]\n")
 
@@ -172,6 +191,9 @@ async def play_audio():
     )
     while True:
         bytestream = await audio_queue_output.get()
+        # Drop chunk if barge-in happened — don't play stale audio
+        if interrupt_event.is_set():
+            continue
         await asyncio.to_thread(stream.write, bytestream)
 
 
@@ -181,11 +203,13 @@ async def bl_listener(session):
     while True:
         transcript = await transcript_queue.get()
 
-        if _bl_processing.is_set():
-            print("[BL Listener] Race condition caught — discarding.")
+        if _bl_running.is_set():
+            print("[BL Listener] Interrupted during classification — aborting.")
             continue
 
-        _bl_processing.set()
+        _bl_running.set()
+        _bl_cooldown.set()
+        interrupt_event.clear()  # fresh cycle — reset interrupt
 
         while not transcript_queue.empty():
             discarded = transcript_queue.get_nowait()
@@ -203,14 +227,21 @@ that could affect asset prices? Reply with only YES or NO.
 Text: {transcript}"""
             )
 
+            # Check if user interrupted during classification
+            if interrupt_event.is_set():
+                print("[BL Listener] Interrupted during classification — aborting.")
+                return
+
             is_market_news = classification.text.strip().upper().startswith("YES")
             print(f"[BL Listener] Market news detected: {is_market_news}")
 
             if is_market_news:
                 print("[BL Listener] Running Black-Litterman pipeline...")
 
-                # Read current weights from Firestore so post-rebalance runs
-                # use the confirmed weights, not the hardcoded market weights.
+                # Acknowledge immediately
+                await session.send_realtime_input(text="Understood. Stand by for analysis.")
+                print("[BL Listener] Acknowledgment sent.")
+
                 current_state = await asyncio.to_thread(get_state)
                 current_weights_dict = current_state["portfolio"]["current"]
                 weights_live = np.array([current_weights_dict[a] for a in ASSETS])
@@ -224,41 +255,57 @@ Text: {transcript}"""
                     COV
                 )
 
-                push_bl_result(
-                    transcript=transcript,
-                    views=bl_result["views"],
-                    weights_after=bl_result["weights"],
-                    sharpe_after=bl_result["sharpe_ratio"],
-                )
+                # Check if user interrupted during BL calculation
+                if interrupt_event.is_set():
+                    print("[BL Listener] Interrupted during BL calc — skipping result injection.")
+                else:
+                    push_bl_result(
+                        transcript=transcript,
+                        views=bl_result["views"],
+                        weights_after=bl_result["weights"],
+                        sharpe_after=bl_result["sharpe_ratio"],
+                    )
 
-                prompt = format_bl_result_for_voice(bl_result, current_weights_dict)
-                set_status("speaking")
+                    prompt = format_bl_result_for_voice(bl_result, current_weights_dict)
+                    set_status("speaking")
+                    await session.send_realtime_input(text=prompt)
+                    print("[BL Listener] Results injected. Waiting for agent to finish speaking...")
 
-                # send_realtime_input(text=) reliably triggers an audio response.
-                # send_client_content was not producing audio in all SDK versions.
-                # The _bl_processing flag (set above) blocks any new transcript
-                # from the cooldown window from re-triggering the pipeline.
-                await session.send_realtime_input(text=prompt)
-                print("[BL Listener] Results injected. Cooldown started (15s).")
-
-                # Wait for agent to finish speaking before clearing cooldown
-                await asyncio.sleep(5)   # give model time to start responding
-                await asyncio.sleep(10)  # rest of cooldown
-                print("[BL Listener] Cooldown ended — listening again.\n")
+                    await asyncio.wait_for(_wait_for_interrupt_or_silence(), timeout=30)
+                    print("[BL Listener] Agent finished speaking.")
 
             else:
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
 
+        except asyncio.TimeoutError:
+            print("[BL Listener] Timeout — resuming.")
         except Exception as e:
             print(f"[BL Listener error] {e}")
 
         finally:
-            _bl_processing.clear()
+            _bl_running.clear()
             set_status("listening")
+            asyncio.get_event_loop().call_later(
+                BL_COOLDOWN_SECONDS,
+                _bl_cooldown.clear
+            )
+            print(f"[BL Listener] BL cooldown active for {BL_COOLDOWN_SECONDS}s — conversation unblocked.\n")
             while not transcript_queue.empty():
                 transcript_queue.get_nowait()
             while not _raw_transcript_queue.empty():
                 _raw_transcript_queue.get_nowait()
+
+
+async def _wait_for_interrupt_or_silence():
+    """Wait until agent finishes speaking OR user interrupts — whichever comes first."""
+    while True:
+        if interrupt_event.is_set():
+            return  # user interrupted
+        if not agent_is_speaking.is_set():
+            await asyncio.sleep(0.8)  # confirm silence
+            if not agent_is_speaking.is_set():
+                return  # agent finished naturally
+        await asyncio.sleep(0.1)
 
 
 async def run_voice_agent():
