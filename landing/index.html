@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Litterman.ai — Voice-Powered Portfolio Optimization</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080b0f;
+      --surface: #0e1318;
+      --surface2: #141a21;
+      --border: rgba(255,255,255,0.07);
+      --gold: #c9a84c;
+      --gold-light: #e8c97a;
+      --gold-dim: rgba(201,168,76,0.15);
+      --gold-glow: rgba(201,168,76,0.25);
+      --text: #f0ede8;
+      --muted: #7a8490;
+      --muted2: #4a5260;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      backdrop-filter: blur(20px);
+      background: rgba(8,11,15,0.7);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 24px;
+    }
+    .logo { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+    .logo span { color: var(--gold); }
+    .btn-outline {
+      padding: 8px 18px; border-radius: 6px;
+      border: 1px solid rgba(201,168,76,0.35);
+      color: var(--gold); background: transparent;
+      font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+      letter-spacing: 0.03em;
+    }
+    .btn-outline:hover { background: var(--gold-dim); border-color: var(--gold); }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative; padding: 160px 24px 100px;
+      overflow: hidden; text-align: center;
+    }
+    .hero-grid {
+      position: absolute; inset: 0; opacity: 0.04;
+      background-image:
+        linear-gradient(var(--gold) 1px, transparent 1px),
+        linear-gradient(90deg, var(--gold) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+    .hero-glow {
+      position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 300px;
+      background: radial-gradient(ellipse, rgba(201,168,76,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-inner { position: relative; max-width: 800px; margin: 0 auto; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 100px;
+      background: var(--gold-dim);
+      border: 1px solid rgba(201,168,76,0.3);
+      font-size: 0.72rem; font-weight: 600; color: var(--gold);
+      letter-spacing: 0.06em; text-transform: uppercase;
+      margin-bottom: 32px;
+      animation: fadeUp 0.6s ease both;
+    }
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--gold);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(3rem, 8vw, 5.5rem);
+      line-height: 1.08; letter-spacing: -0.02em;
+      margin-bottom: 24px;
+      animation: fadeUp 0.7s 0.1s ease both;
+    }
+    .gold-text {
+      background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 50%, #a07830 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 1.05rem; color: var(--muted); max-width: 500px;
+      margin: 0 auto 40px; line-height: 1.7;
+      animation: fadeUp 0.7s 0.2s ease both;
+    }
+    .hero-btns {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 64px;
+      animation: fadeUp 0.7s 0.3s ease both;
+    }
+    .btn-gold {
+      padding: 14px 28px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--gold-light), var(--gold));
+      color: #0a0700; font-family: 'Syne', sans-serif;
+      font-size: 0.9rem; font-weight: 700; border: none; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px;
+      box-shadow: 0 0 30px var(--gold-glow), 0 4px 16px rgba(0,0,0,0.4);
+      transition: all 0.25s; letter-spacing: 0.02em;
+    }
+    .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 0 50px var(--gold-glow), 0 8px 24px rgba(0,0,0,0.5); }
+    .btn-ghost {
+      padding: 14px 24px; border-radius: 8px;
+      background: transparent; border: none;
+      color: var(--muted); font-family: 'Syne', sans-serif;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      transition: color 0.2s;
+    }
+    .btn-ghost:hover { color: var(--text); }
+
+    /* ── WAVEFORM ── */
+    .waveform-wrap {
+      animation: fadeUp 0.7s 0.4s ease both;
+      display: flex; align-items: center; justify-content: center;
+      gap: 4px; height: 60px;
+    }
+    .wave-bar {
+      width: 3px; border-radius: 3px;
+      background: linear-gradient(to top, var(--gold), var(--gold-light));
+      animation: wave 1.4s ease-in-out infinite;
+    }
+    @keyframes wave {
+      0%,100%{transform:scaleY(0.2);opacity:0.4}
+      50%{transform:scaleY(1);opacity:1}
+    }
+
+    @keyframes fadeUp {
+      from{opacity:0;transform:translateY(24px)}
+      to{opacity:1;transform:translateY(0)}
+    }
+
+    /* ── SECTION SHARED ── */
+    section { padding: 100px 24px; }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-header { text-align: center; margin-bottom: 64px; }
+    .section-header h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 1.15; margin-bottom: 12px;
+    }
+    .section-header p { color: var(--muted); font-size: 1rem; max-width: 400px; margin: 0 auto; }
+
+    /* ── CONVERSATION DEMO ── */
+    .demo-bg { background: var(--surface); border-radius: 2px; }
+    .conversation {
+      max-width: 720px; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+    .msg {
+      display: flex; gap: 12px; align-items: flex-start;
+      opacity: 0; transform: translateY(16px);
+      transition: all 0.5s ease;
+    }
+    .msg.visible { opacity: 1; transform: translateY(0); }
+    .msg-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 700; flex-shrink: 0;
+      letter-spacing: 0.05em;
+    }
+    .msg-avatar.user { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+    .msg-avatar.ai { background: var(--gold-dim); border: 1px solid rgba(201,168,76,0.3); color: var(--gold); }
+    .msg-bubble {
+      padding: 14px 18px; border-radius: 12px;
+      font-size: 0.9rem; line-height: 1.6; max-width: 560px;
+    }
+    .msg.user-msg { flex-direction: row-reverse; }
+    .msg.user-msg .msg-bubble { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 12px 4px 12px 12px; }
+    .msg.ai-msg .msg-bubble { background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.15); color: var(--text); border-radius: 4px 12px 12px 12px; }
+    .msg-bubble strong { color: var(--gold-light); }
+
+    /* ── HOW IT WORKS ── */
+    .steps {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 2px; position: relative;
+    }
+    .step {
+      padding: 40px 32px;
+      background: var(--surface);
+      position: relative;
+      transition: background 0.3s;
+    }
+    .step:hover { background: var(--surface2); }
+    .step-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem; color: var(--gold); letter-spacing: 0.1em;
+      margin-bottom: 20px; display: block;
+    }
+    .step-icon {
+      font-size: 1.8rem; margin-bottom: 16px; display: block;
+    }
+    .step h3 { font-size: 1rem; font-weight: 700; margin-bottom: 10px; }
+    .step p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+    .step-connector {
+      position: absolute; right: -1px; top: 50%; transform: translateY(-50%);
+      width: 2px; height: 40px; background: var(--gold-dim);
+    }
+
+    /* ── FEATURES ── */
+    .features-bg { background: var(--surface); border-radius: 2px; }
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1px;
+    }
+    .feature {
+      padding: 40px 36px;
+      background: var(--bg);
+      transition: background 0.3s;
+    }
+    .feature:hover { background: var(--surface2); }
+    .feature-tag {
+      display: inline-block; padding: 3px 10px; border-radius: 4px;
+      background: var(--gold-dim); border: 1px solid rgba(201,168,76,0.2);
+      font-size: 0.68rem; font-weight: 700; color: var(--gold);
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 18px;
+    }
+    .feature h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 10px; }
+    .feature p { font-size: 0.85rem; color: var(--muted); line-height: 1.65; }
+
+    /* ── CTA ── */
+    .cta-inner {
+      text-align: center; max-width: 600px; margin: 0 auto;
+      padding: 80px 40px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      position: relative; overflow: hidden;
+    }
+    .cta-glow {
+      position: absolute; bottom: -60px; left: 50%; transform: translateX(-50%);
+      width: 400px; height: 200px;
+      background: radial-gradient(ellipse, rgba(201,168,76,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta-inner h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2rem, 5vw, 3rem); margin-bottom: 16px;
+    }
+    .cta-inner p { color: var(--muted); margin-bottom: 36px; font-size: 0.95rem; }
+
+    /* ── EMAIL INPUT ── */
+    .email-row {
+      display: flex; gap: 8px; max-width: 420px; margin: 0 auto;
+    }
+    .email-input {
+      flex: 1; padding: 12px 18px; border-radius: 6px;
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); font-family: 'Syne', sans-serif; font-size: 0.85rem;
+      outline: none; transition: border-color 0.2s;
+    }
+    .email-input:focus { border-color: rgba(201,168,76,0.5); }
+    .email-input::placeholder { color: var(--muted2); }
+    .btn-gold-sm {
+      padding: 12px 20px; border-radius: 6px;
+      background: linear-gradient(135deg, var(--gold-light), var(--gold));
+      color: #0a0700; font-family: 'Syne', sans-serif;
+      font-size: 0.82rem; font-weight: 700; border: none; cursor: pointer;
+      white-space: nowrap; transition: all 0.2s;
+    }
+    .btn-gold-sm:hover { opacity: 0.9; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 24px;
+    }
+    .footer-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.82rem; color: var(--muted);
+    }
+
+    /* ── DIVIDER ── */
+    .divider { height: 1px; background: var(--border); }
+
+    /* ── SCROLL REVEAL ── */
+    .reveal { opacity: 0; transform: translateY(30px); transition: all 0.7s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    @media(max-width: 600px) {
+      .email-row { flex-direction: column; }
+      .hero-btns { flex-direction: column; align-items: stretch; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-inner">
+      <span class="logo">Litterman<span>.ai</span></span>
+      <button class="btn-outline" onclick="document.getElementById('waitlist').scrollIntoView({behavior:'smooth'})">
+        Request Access
+      </button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-grid"></div>
+    <div class="hero-glow"></div>
+    <div class="hero-inner">
+      <div class="badge">
+        <span class="badge-dot"></span>
+        Voice-Powered Portfolio Optimization
+      </div>
+      <h1>
+        Speak markets.<br>
+        <span class="gold-text">Get allocations.</span>
+      </h1>
+      <p>
+        Litterman.ai listens to your market views, runs the Black-Litterman
+        model, and responds with a rebalancing recommendation — all through
+        natural conversation.
+      </p>
+      <div class="hero-btns">
+        <button class="btn-gold" onclick="document.getElementById('waitlist').scrollIntoView({behavior:'smooth'})">
+          Request Early Access
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+        <button class="btn-ghost" onclick="document.getElementById('demo').scrollIntoView({behavior:'smooth'})">
+          Watch Demo ↓
+        </button>
+      </div>
+      <!-- Waveform -->
+      <div class="waveform-wrap" id="waveform"></div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- CONVERSATION DEMO -->
+  <section id="demo" class="demo-bg">
+    <div class="section-inner">
+      <div class="section-header reveal">
+        <h2>A real <span class="gold-text">conversation</span></h2>
+        <p>See how a portfolio manager interacts with Litterman.ai.</p>
+      </div>
+      <div class="conversation" id="conversation">
+        <div class="msg user-msg">
+          <div class="msg-avatar user">PM</div>
+          <div class="msg-bubble">
+            The Fed just signaled two more rate hikes this year. Core inflation is still sticky at 3.8%.
+          </div>
+        </div>
+        <div class="msg ai-msg">
+          <div class="msg-avatar ai">BL</div>
+          <div class="msg-bubble">
+            Understood. Hawkish Fed signal with persistent inflation. Running Black-Litterman…<br><br>
+            <strong>Recommended rebalancing:</strong><br>
+            ↓ Stocks USA: 60% → <strong>48%</strong> (−12pp)<br>
+            ↓ Stocks EM: 30% → <strong>22%</strong> (−8pp)<br>
+            ↑ Bonds USA: 10% → <strong>30%</strong> (+20pp)<br><br>
+            Expected Sharpe improves from <strong>0.81 → 1.04</strong>. Confirm rebalancing?
+          </div>
+        </div>
+        <div class="msg user-msg">
+          <div class="msg-avatar user">PM</div>
+          <div class="msg-bubble">Confirmed. Apply the new weights.</div>
+        </div>
+        <div class="msg ai-msg">
+          <div class="msg-avatar ai">BL</div>
+          <div class="msg-bubble">
+            ✓ Portfolio updated. Dashboard reflecting new allocations. 
+            Monitoring for next market signal.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- HOW IT WORKS -->
+  <section>
+    <div class="section-inner">
+      <div class="section-header reveal">
+        <h2>How it <span class="gold-text">works</span></h2>
+        <p>From spoken insight to optimized allocation in seconds.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <span class="step-num">01 — LISTEN</span>
+          <span class="step-icon">🎙️</span>
+          <h3>Speak your view</h3>
+          <p>Describe a macro event, earnings signal, or geopolitical development in plain English.</p>
+          <div class="step-connector"></div>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">02 — EXTRACT</span>
+          <span class="step-icon">🧠</span>
+          <h3>Gemini extracts views</h3>
+          <p>Gemini 2.5 Flash classifies the news and extracts structured P/Q matrices for the BL model — grounded with live search.</p>
+          <div class="step-connector"></div>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">03 — OPTIMIZE</span>
+          <span class="step-icon">⚙️</span>
+          <h3>Black-Litterman runs</h3>
+          <p>Market equilibrium priors are blended with your views via Bayesian optimization with turnover and concentration constraints.</p>
+          <div class="step-connector"></div>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">04 — RESPOND</span>
+          <span class="step-icon">📊</span>
+          <h3>Voice + dashboard</h3>
+          <p>The agent speaks the recommendation aloud and the live dashboard updates in real time via Firestore.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- FEATURES -->
+  <section class="features-bg">
+    <div class="section-inner">
+      <div class="section-header reveal">
+        <h2>Built for <span class="gold-text">fund managers</span></h2>
+        <p>Not a chatbot. A quantitative voice co-pilot.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature reveal">
+          <span class="feature-tag">Voice</span>
+          <h3>Native audio via Gemini Live</h3>
+          <p>Real-time bidirectional voice using Gemini 2.5 Flash Native Audio — no transcription lag, no push-to-talk.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-tag">Quant</span>
+          <h3>Black-Litterman model</h3>
+          <p>Rigorous Bayesian portfolio optimization — not LLM guessing. Market equilibrium priors blended with your explicit views.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-tag">Grounded</span>
+          <h3>Live market search</h3>
+          <p>Google Search Grounding ensures view extraction is anchored to current market data, not just training knowledge.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-tag">Real-time</span>
+          <h3>Live dashboard</h3>
+          <p>Allocation changes, Sharpe ratio, and portfolio delta visible instantly. Confirm rebalancing with a single voice command.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-tag">Cloud</span>
+          <h3>Stateless & scalable</h3>
+          <p>Deployed on Google Cloud Run with Firestore shared state — no local dependencies, accessible from anywhere.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-tag">B2B</span>
+          <h3>Investment committee ready</h3>
+          <p>Designed for the real workflow of portfolio managers — speak a macro view during a call, get allocations before it ends.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- CTA / WAITLIST -->
+  <section id="waitlist">
+    <div class="section-inner">
+      <div class="cta-inner reveal">
+        <div class="cta-glow"></div>
+        <h2>Ready to <span class="gold-text">rebalance</span>?</h2>
+        <p>Join the waitlist for early access to voice-driven portfolio optimization.</p>
+        <div class="email-row">
+          <input class="email-input" type="email" placeholder="your@fund.com" id="emailInput" />
+          <button class="btn-gold-sm" onclick="handleWaitlist()">Join Waitlist</button>
+        </div>
+        <p id="waitlist-msg" style="margin-top:14px;font-size:0.8rem;color:var(--gold);display:none;">
+          ✓ You're on the list. We'll be in touch.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <span class="logo" style="font-size:0.95rem">Litterman<span>.ai</span></span>
+      <span>© 2026 Litterman.ai. All rights reserved.</span>
+    </div>
+  </footer>
+
+  <script>
+    // Waitlist — visual only
+    window.handleWaitlist = function() {
+      const input = document.getElementById('emailInput');
+      const msg = document.getElementById('waitlist-msg');
+      const btn = document.querySelector('.btn-gold-sm');
+      const email = input.value.trim();
+
+      if (!email || !email.includes('@')) {
+        input.style.borderColor = 'rgba(255,80,80,0.5)';
+        setTimeout(() => input.style.borderColor = '', 1500);
+        return;
+      }
+
+      btn.disabled = true;
+      msg.textContent = '✓ You\'re on the list. We\'ll be in touch.';
+      msg.style.display = 'block';
+      input.value = '';
+    };
+  </script>
+
+  <script>
+    // Waveform bars
+    const wf = document.getElementById('waveform');
+    const heights = [20,35,55,70,85,95,85,70,90,75,60,80,65,50,70,85,90,75,55,40,30,45,60,75,85,70,55,35,20,30];
+    heights.forEach((h, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'wave-bar';
+      bar.style.height = h + 'px';
+      bar.style.animationDelay = (i * 0.05) + 's';
+      wf.appendChild(bar);
+    });
+
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // Conversation stagger
+    const msgObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const msgs = document.querySelectorAll('.msg');
+          msgs.forEach((m, i) => {
+            setTimeout(() => m.classList.add('visible'), i * 350);
+          });
+          msgObserver.disconnect();
+        }
+      });
+    }, { threshold: 0.2 });
+    msgObserver.observe(document.getElementById('conversation'));
+
+    // Waitlist handled by Firebase module above
+  </script>
+</body>
+</html>

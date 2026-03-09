@@ -10,3 +10,4 @@ requirements.txt    text eol=lf
 
 # Auto-detect everything else
 *                   text=auto
+
