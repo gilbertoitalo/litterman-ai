@@ -7,7 +7,6 @@ load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 # Verify key
 api_key = os.getenv("GEMINI_API_KEY")
-print(f"API key loaded: {api_key[:8] if api_key else 'NOT FOUND'}")
 
 # Only import after env is loaded
 import asyncio
