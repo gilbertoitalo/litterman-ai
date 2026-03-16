@@ -7,11 +7,11 @@
 #
 # Requirements:
 #   - gcloud CLI installed and authenticated (gcloud auth login)
-#   - Docker installed (or gcloud builds submit used instead)
-#   - PROJECT_ID set below or exported as env var before running
-#
-# This script is included in the repository as proof of automated deployment
-# for the Gemini Live Agent Challenge bonus criteria.
+#   - GEMINI_API_KEY stored in Google Secret Manager (one-time setup):
+#       gcloud secrets create GEMINI_API_KEY --data-file=- <<< "YOUR_KEY"
+#       gcloud secrets add-iam-policy-binding GEMINI_API_KEY \
+#         --member "serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+#         --role "roles/secretmanager.secretAccessor"
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e  # exit on any error
@@ -21,7 +21,6 @@ PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-litterman-ai}"
 REGION="us-central1"
 SERVICE_NAME="litterman-dashboard"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
-SERVICE_ACCOUNT="${SERVICE_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 echo "================================================"
 echo " Litterman AI — Cloud Run Deploy"
@@ -36,7 +35,6 @@ echo "[1/4] Setting active GCP project..."
 gcloud config set project "${PROJECT_ID}"
 
 # ── Step 2: Build and push image via Cloud Build ──────────────────────────────
-# Uses Cloud Build instead of local Docker — no Docker daemon required locally.
 echo ""
 echo "[2/4] Building and pushing image via Cloud Build..."
 gcloud builds submit \
@@ -51,12 +49,12 @@ gcloud run deploy "${SERVICE_NAME}" \
     --platform managed \
     --region "${REGION}" \
     --allow-unauthenticated \
-    --service-account "${SERVICE_ACCOUNT}" \
     --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID}" \
+    --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest" \
     --memory 512Mi \
     --cpu 1 \
     --min-instances 0 \
-    --max-instances 3 \
+    --max-instances 1 \
     --port 8080 \
     --project "${PROJECT_ID}"
 

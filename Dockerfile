@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir \
     scipy==1.17.0 \
     python-dotenv==1.2.1 \
     requests==2.32.5\
-    flask-limiter==3.8.0
+    flask-limiter==3.5.0
 
 COPY server.py .
 COPY dashboard.html .
@@ -24,4 +24,4 @@ COPY core/ ./core/
 
 ENV PORT=8080
 
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 server:app
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 1 --timeout 120 server:app

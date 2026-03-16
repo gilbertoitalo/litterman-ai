@@ -14,20 +14,33 @@ from pathlib import Path
 from flask import Flask, request, jsonify, send_file
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_limiter.errors import RateLimitExceeded
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
 app = Flask(__name__)
 
+# Trust the X-Forwarded-For header injected by Cloud Run's load balancer.
+# Without this, request.remote_addr is always the proxy IP — all clients
+# appear as the same "user" and rate limiting never triggers correctly.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 # ── Rate limiting ─────────────────────────────────────────────────────────────
 # 60 requests/hour per IP globally; /analyse capped at 10/minute per IP
 limiter = Limiter(
-    get_remote_address,
+    key_func=get_remote_address,
     app=app,
     default_limits=["60 per hour"],
     storage_uri="memory://",
+    on_breach=lambda limit: app.logger.warning(f"Rate limit breached: {limit}"),
 )
+
+# Explicit 429 handler — flask-limiter silently returns 200 without this
+@app.errorhandler(RateLimitExceeded)
+def handle_rate_limit(e):
+    return jsonify({"error": "Rate limit exceeded. Try again later."}), 429
 
 ASSETS = ['Stocks_USA', 'Stocks_EM', 'Bonds_USA']
 COV = np.diag([0.0225, 0.0324, 0.0025])
