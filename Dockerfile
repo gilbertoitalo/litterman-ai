@@ -15,7 +15,8 @@ RUN pip install --no-cache-dir \
     numpy==2.4.2 \
     scipy==1.17.0 \
     python-dotenv==1.2.1 \
-    requests==2.32.5
+    requests==2.32.5\
+    flask-limiter==3.8.0
 
 COPY server.py .
 COPY dashboard.html .
