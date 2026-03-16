@@ -24,4 +24,4 @@ COPY core/ ./core/
 
 ENV PORT=8080
 
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 server:app
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 server:app
