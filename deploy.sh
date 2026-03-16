@@ -53,7 +53,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest" \
     --memory 512Mi \
     --cpu 1 \
-    --min-instances 0 \
+    --min-instances 1 \
     --max-instances 1 \
     --port 8080 \
     --project "${PROJECT_ID}"
