@@ -120,6 +120,10 @@ It updates in real time as the voice agent processes market news locally and wri
 
 ---
 
+## 🧪 Reproducible Testing
+
+Follow the steps below to run the voice agent locally and reproduce the demo.
+
 ## 🚀 Running Locally (Voice Agent)
 
 ### Prerequisites
@@ -265,6 +269,6 @@ News → Gemini + Grounding → Views (P matrix · Q vector)
 - **Challenge:** Gemini Live Agent Challenge 2026
 - **Category:** Live Agents
 - **Mandatory tech:** Gemini Live API · Google GenAI SDK · Cloud Run · Firestore · Google Search Grounding
-- **Submission deadline:** March 17, 2026
+- **Submission deadline:** March 16, 2026
 
 *This project was built for the Gemini Live Agent Challenge. #GeminiLiveAgentChallenge*

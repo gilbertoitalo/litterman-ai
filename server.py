@@ -12,11 +12,22 @@ import json
 import numpy as np
 from pathlib import Path
 from flask import Flask, request, jsonify, send_file
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+# 60 requests/hour per IP globally; /analyse capped at 10/minute per IP
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["60 per hour"],
+    storage_uri="memory://",
+)
 
 ASSETS = ['Stocks_USA', 'Stocks_EM', 'Bonds_USA']
 COV = np.diag([0.0225, 0.0324, 0.0025])
@@ -34,6 +45,7 @@ def health():
 
 
 @app.route("/analyse", methods=["POST"])
+@limiter.limit("10 per minute")
 def analyse():
     from core.gemini_agent import run_bl_pipeline, fetch_url_content
     from core.shared_state import push_bl_result, get_state
